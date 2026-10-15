@@ -1,0 +1,60 @@
+[
+  {
+    "type": "issue",
+    "check_name": "args[module]",
+    "categories": ["syntax", "experimental"],
+    "url": "https://docs.ansible.com/projects/lint/rules/args/",
+    "severity": "minor",
+    "description": "missing required arguments: path",
+    "fingerprint": "713936b4476b68ae1ec410457d2bc9c6ccdac43b87406d15bb52b5308b103e12",
+    "location": { "path": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "lines": { "begin": 11 } },
+    "content": { "body": "Task/Handler: Missing required option" }
+  },
+  {
+    "type": "issue",
+    "check_name": "no-free-form",
+    "categories": ["syntax", "risk"],
+    "url": "https://docs.ansible.com/projects/lint/rules/no-free-form/",
+    "severity": "major",
+    "description": "Avoid using free-form when calling module actions. (ansible.builtin.file)",
+    "fingerprint": "4cf24fcc3586a35ad58271fd55047cfa3ea16e006abb5843d1ac6e620b2e202f",
+    "location": { "path": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "lines": { "begin": 17 } },
+    "content": { "body": "ansible.builtin.file" }
+  },
+  {
+    "type": "issue",
+    "check_name": "risky-file-permissions",
+    "categories": ["unpredictability"],
+    "url": "https://docs.ansible.com/projects/lint/rules/risky-file-permissions/",
+    "severity": "major",
+    "description": "File permissions unset or incorrect.",
+    "fingerprint": "eba412b92d4289eb905f994e6ab06b25168252852e59102fcc762daf97976bbb",
+    "location": { "path": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "lines": { "begin": 20 } },
+    "content": { "body": "Task/Handler: Mutually exclusive" }
+  },
+  {
+    "type": "issue",
+    "check_name": "args[module]",
+    "categories": ["syntax", "experimental"],
+    "url": "https://docs.ansible.com/projects/lint/rules/args/",
+    "severity": "minor",
+    "description": "value of proto must be one of: ah, any, esp, ipv6, tcp, udp, gre, igmp, got: tcpx",
+    "fingerprint": "56ccc46e596c9463740353336786a99a5a0eb293da627b25ad66ee1463cccc6b",
+    "location": { "path": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "lines": { "begin": 37 } },
+    "content": { "body": "Task/Handler: Redirected short name" }
+  },
+  {
+    "type": "issue",
+    "check_name": "fqcn[action]",
+    "categories": ["formatting"],
+    "url": "https://docs.ansible.com/projects/lint/rules/fqcn/",
+    "severity": "major",
+    "description": "Use FQCN for module actions, such `community.general.ufw`.",
+    "fingerprint": "30524d191b66f3ab9b742a39d738e436c1e2109dcef2fae0843a3b754466115c",
+    "location": {
+      "path": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml",
+      "positions": { "begin": { "line": 38, "column": 3 } }
+    },
+    "content": { "body": "Action `ufw` is not FQCN." }
+  }
+]

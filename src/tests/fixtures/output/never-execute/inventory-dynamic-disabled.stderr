@@ -1,0 +1,29 @@
+[WARNING]: Failed to parse inventory with 'ini' plugin: Failed to parse inventory: Expected key=value host variable assignment, got: mkdir
+
+Failed to parse inventory with 'ini' plugin.
+
+<<< caused by >>>
+
+Failed to parse inventory: Expected key=value host variable assignment, got: mkdir
+Origin: /tmp/ansible-mcp-work/hostile/inventory/inv.sh
+
+[WARNING]: Unable to parse /tmp/ansible-mcp-work/hostile/inventory/inv.sh as an inventory source
+[WARNING]: Failed to parse inventory with 'yaml' plugin: Plugin configuration YAML file, not YAML inventory
+
+Failed to parse inventory with 'yaml' plugin.
+
+<<< caused by >>>
+
+Plugin configuration YAML file, not YAML inventory
+Origin: <inventory plugin 'yaml' with source '/tmp/ansible-mcp-work/hostile/inventory/zz_constructed.yml'>
+
+[WARNING]: Failed to parse inventory with 'ini' plugin: Failed to parse inventory: Invalid host pattern 'plugin:' supplied, ending in ':' is not allowed, this character is reserved to provide a port.
+
+Failed to parse inventory with 'ini' plugin.
+
+<<< caused by >>>
+
+Failed to parse inventory: Invalid host pattern 'plugin:' supplied, ending in ':' is not allowed, this character is reserved to provide a port.
+Origin: /tmp/ansible-mcp-work/hostile/inventory/zz_constructed.yml
+
+[WARNING]: Unable to parse /tmp/ansible-mcp-work/hostile/inventory/zz_constructed.yml as an inventory source

@@ -1,0 +1,7 @@
+[WARNING]: Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+[DEPRECATION WARNING]: community.general.proxmox_kvm has been deprecated. The proxmox content has been moved to community.proxmox. This feature will be removed from collection 'community.general' version 15.0.0.
+Origin: <CLI option 'args'>
+
+community.general.proxmox_kvm
+
+[WARNING]: community.general.proxmox_kvm was not found

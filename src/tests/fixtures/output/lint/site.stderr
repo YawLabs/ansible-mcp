@@ -1,0 +1,13 @@
+[DEPRECATION WARNING]: Param 'list_all' is deprecated. See the module docs for more information. This feature will be removed from collection 'community.general' version 11.0.0.
+[DEPRECATION WARNING]: Importing 'to_native' from 'ansible.module_utils._text' is deprecated. This feature will be removed from ansible-core version 2.24. Use ansible.module_utils.common.text.converters instead.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+Read documentation for instructions on how to ignore specific rule violations.
+
+# Rule Violation Summary
+
+  1 no-free-form profile:basic tags:syntax,risk
+  1 yaml profile:basic tags:formatting,yaml
+  1 fqcn profile:basic tags:formatting
+
+Failed: 3 failure(s), 0 warning(s) in 7 files processed of 7 encountered. Last profile that met the validation criteria was 'min'.

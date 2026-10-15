@@ -1,0 +1,6 @@
+# /tmp/ansible-mcp-work/project/roles
+- common, (unknown version)
+- webapp, (unknown version)
+# /tmp/ansible-mcp-work/project/roles
+- common, (unknown version)
+- webapp, (unknown version)

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.5.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "ansible-lint",
+          "version": "26.10.1",
+          "informationUri": "https://github.com/ansible/ansible-lint",
+          "rules": [
+            {
+              "id": "args[module]",
+              "name": "args[module]",
+              "shortDescription": { "text": "missing required arguments: path" },
+              "defaultConfiguration": { "level": "error" },
+              "help": { "text": "Check whether tasks are using correct module options." },
+              "helpUri": "https://docs.ansible.com/projects/lint/rules/args/",
+              "properties": { "tags": ["syntax", "experimental"] }
+            },
+            {
+              "id": "no-free-form",
+              "name": "no-free-form",
+              "shortDescription": {
+                "text": "Avoid using free-form when calling module actions. (ansible.builtin.file)"
+              },
+              "defaultConfiguration": { "level": "warning" },
+              "help": { "text": "Avoid free-form inside files as it can produce subtle bugs." },
+              "helpUri": "https://docs.ansible.com/projects/lint/rules/no-free-form/",
+              "properties": { "tags": ["syntax", "risk"] }
+            },
+            {
+              "id": "risky-file-permissions",
+              "name": "risky-file-permissions",
+              "shortDescription": { "text": "File permissions unset or incorrect." },
+              "defaultConfiguration": { "level": "error" },
+              "help": {
+                "text": "Missing or unsupported mode parameter can cause unexpected file permissions based on version of Ansible being used. Be explicit, like `mode: 0644` to avoid hitting this rule. Special `preserve` value is accepted only by `copy`, `template` modules."
+              },
+              "helpUri": "https://docs.ansible.com/projects/lint/rules/risky-file-permissions/",
+              "properties": { "tags": ["unpredictability"] }
+            },
+            {
+              "id": "fqcn[action]",
+              "name": "fqcn[action]",
+              "shortDescription": { "text": "Use FQCN for module actions, such `community.general.ufw`." },
+              "defaultConfiguration": { "level": "warning" },
+              "help": { "text": "Check whether actions are using using full qualified collection names." },
+              "helpUri": "https://docs.ansible.com/projects/lint/rules/fqcn/",
+              "properties": { "tags": ["formatting"] }
+            }
+          ]
+        }
+      },
+      "columnKind": "utf16CodeUnits",
+      "results": [
+        {
+          "ruleId": "args[module]",
+          "level": "warning",
+          "message": { "text": "Task/Handler: Missing required option" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "uriBaseId": "SRCROOT" },
+                "region": { "startLine": 11 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "no-free-form",
+          "level": "error",
+          "message": { "text": "ansible.builtin.file" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "uriBaseId": "SRCROOT" },
+                "region": { "startLine": 17 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "risky-file-permissions",
+          "level": "error",
+          "message": { "text": "Task/Handler: Mutually exclusive" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "uriBaseId": "SRCROOT" },
+                "region": { "startLine": 20 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "args[module]",
+          "level": "warning",
+          "message": { "text": "Task/Handler: Redirected short name" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "uriBaseId": "SRCROOT" },
+                "region": { "startLine": 37 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "fqcn[action]",
+          "level": "error",
+          "message": { "text": "Action `ufw` is not FQCN." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "/tmp/ansible-mcp-work/lintbad/tasks/main.yml", "uriBaseId": "SRCROOT" },
+                "region": { "startLine": 38, "startColumn": 3 }
+              }
+            }
+          ]
+        }
+      ],
+      "originalUriBaseIds": { "SRCROOT": { "uri": "file:///tmp/ansible-mcp-work/project/" } }
+    }
+  ]
+}

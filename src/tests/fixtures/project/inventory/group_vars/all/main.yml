@@ -1,0 +1,5 @@
+app_env: staging
+db_password: "{{ vault_db_password }}"
+api_token: FIXTURE-plain-api-token-01
+smtp_url: smtp://mailer:FIXTURE-plain-url-pass-02@mail.example.com:587
+token_ttl: 3600

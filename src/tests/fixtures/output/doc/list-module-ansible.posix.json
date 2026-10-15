@@ -1,0 +1,16 @@
+{
+  "ansible.posix.acl": "Set and retrieve file ACL information",
+  "ansible.posix.at": "Schedule the execution of a command or script file via the at command",
+  "ansible.posix.authorized_key": "Adds or removes an SSH authorized key",
+  "ansible.posix.firewalld": "Manage arbitrary ports/services with firewalld",
+  "ansible.posix.firewalld_info": "Gather information about firewalld",
+  "ansible.posix.mount": "Control active and configured mount points",
+  "ansible.posix.patch": "Apply patch files using the GNU patch tool",
+  "ansible.posix.rhel_facts": "Facts module to set or override RHEL specific facts",
+  "ansible.posix.rhel_rpm_ostree": "Ensure packages exist in a RHEL for Edge rpm-ostree based system",
+  "ansible.posix.rpm_ostree_upgrade": "Manage rpm-ostree upgrade transactions",
+  "ansible.posix.seboolean": "Toggles SELinux booleans",
+  "ansible.posix.selinux": "Change policy and state of SELinux",
+  "ansible.posix.synchronize": "A wrapper around rsync to make common tasks in your playbooks quick and easy",
+  "ansible.posix.sysctl": "Manage entries in sysctl.conf"
+}

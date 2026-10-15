@@ -1,0 +1,13 @@
+# excerpt of community.general 12.0.0 meta/runtime.yml: requires_ansible + plugin_routing.modules entries for modules the fixture project uses
+requires_ansible: '>=2.17.0'
+plugin_routing:
+  modules:
+    proxmox_kvm:
+      redirect: community.proxmox.proxmox_kvm
+      deprecation:
+        removal_version: 15.0.0
+        warning_text: The proxmox content has been moved to community.proxmox.
+    consul_acl:
+      tombstone:
+        removal_version: 10.0.0
+        warning_text: Use community.general.consul_token and/or community.general.consul_policy instead.

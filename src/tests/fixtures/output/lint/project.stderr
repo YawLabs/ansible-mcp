@@ -1,0 +1,23 @@
+WARNING  Ignored exception from JinjaRule.matchyaml while processing inventory/group_vars/all/vault.yml (vars): Decryption failed (no vault secrets were found that could decrypt).
+WARNING  Ignored exception from VariableNamingRule.matchyaml while processing inventory/group_vars/all/vault.yml (vars): Decryption failed (no vault secrets were found that could decrypt).
+[DEPRECATION WARNING]: Importing 'to_bytes' from 'ansible.module_utils._text' is deprecated. This feature will be removed from ansible-core version 2.24. Use ansible.module_utils.common.text.converters instead.
+[DEPRECATION WARNING]: Importing 'to_native' from 'ansible.module_utils._text' is deprecated. This feature will be removed from ansible-core version 2.24. Use ansible.module_utils.common.text.converters instead.
+[DEPRECATION WARNING]: Param 'list_all' is deprecated. See the module docs for more information. This feature will be removed from collection 'community.general' version 11.0.0.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+WARNING  /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible/utils/display.py:719 AnsibleWarning Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+Read documentation for instructions on how to ignore specific rule violations.
+
+# Rule Violation Summary
+
+  2 no-free-form profile:basic tags:syntax,risk
+  1 yaml profile:basic tags:formatting,yaml
+  1 risky-file-permissions profile:basic tags:unpredictability
+  3 fqcn profile:basic tags:formatting
+  2 args profile:basic tags:syntax,experimental
+
+Failed: 7 failure(s), 2 warning(s) in 19 files processed of 20 encountered. Last profile that met the validation criteria was 'min'.

@@ -1,0 +1,5 @@
+[WARNING]: The specified collections path '/tmp/ansible-mcp-work/targets/err2' is not part of the configured Ansible collections paths '/tmp/ansible-mcp-work/collections'. The installed collection will not be picked up in an Ansible run, unless within a playbook-adjacent collections directory.
+[ERROR]: Failed to resolve the requested dependencies map. Could not satisfy the following requirements:
+* community.zzznotreal:==1.0.0 (direct request)
+Hint: Pre-releases hosted on Galaxy or Automation Hub are not installed by default unless a specific version is requested. To enable pre-releases globally, use --pre: [RequirementInformation(requirement=<community.zzznotreal:==1.0.0 of type 'galaxy' from Galaxy>, parent=None)]: Requirements conflict: <community.zzznotreal:==1.0.0 of type 'galaxy' from Galaxy>
+

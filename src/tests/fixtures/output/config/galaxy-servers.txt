@@ -1,0 +1,23 @@
+ANSIBLE_HOME(env: ANSIBLE_HOME) = /tmp/ansible-mcp-work/home
+ANSIBLE_NOCOLOR(env: NO_COLOR) = True
+COLLECTIONS_PATHS(env: ANSIBLE_COLLECTIONS_PATH) = ['/tmp/ansible-mcp-work/collections']
+CONFIG_FILE() = /tmp/ansible-mcp-work/gcfg/ansible.cfg
+DEFAULT_VAULT_IDENTITY_LIST(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = ['dev@./vault-pass.sh']
+DEFAULT_VAULT_PASSWORD_FILE(env: ANSIBLE_VAULT_PASSWORD_FILE) = /tmp/ansible-mcp-work/wrong-pass.txt
+GALAXY_CACHE_DIR(env: ANSIBLE_GALAXY_CACHE_DIR) = /tmp/ansible-mcp-work/cache/galaxy
+GALAXY_SERVER_LIST(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = ['hub', 'release_galaxy']
+VARIABLE_PLUGINS_ENABLED(env: ANSIBLE_VARS_ENABLED) = ['none']
+
+GALAXY_SERVERS:
+
+
+hub
+===
+token(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = FIXTURE-SECRET-05
+url(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = https://hub.example.com/api/galaxy/content/published/
+
+release_galaxy
+==============
+password(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = FIXTURE-SECRET-06
+url(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = https://galaxy.ansible.com/
+username(/tmp/ansible-mcp-work/gcfg/ansible.cfg) = me

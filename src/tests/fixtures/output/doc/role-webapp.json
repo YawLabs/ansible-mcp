@@ -1,0 +1,60 @@
+{
+  "webapp": {
+    "collection": null,
+    "entry_points": {
+      "configure": {
+        "options": {
+          "webapp_port": {
+            "default": 8080,
+            "type": "int"
+          }
+        },
+        "short_description": "Only (re)write configuration files"
+      },
+      "main": {
+        "author": "fixture",
+        "description": ["Installs nginx and deploys the app."],
+        "options": {
+          "webapp_admin_password": {
+            "description": "Initial admin password.",
+            "no_log": true,
+            "type": "str"
+          },
+          "webapp_port": {
+            "default": 8080,
+            "description": "Port nginx listens on.",
+            "type": "int"
+          },
+          "webapp_server_name": {
+            "description": "Public DNS name.",
+            "required": true,
+            "type": "str"
+          },
+          "webapp_tls_mode": {
+            "choices": [false, "self_signed", "acme"],
+            "default": "self_signed",
+            "description": "How the certificate is obtained.",
+            "type": "str"
+          },
+          "webapp_upstreams": {
+            "description": "Backend servers.",
+            "elements": "dict",
+            "options": {
+              "host": {
+                "required": true,
+                "type": "str"
+              },
+              "port": {
+                "default": 9000,
+                "type": "int"
+              }
+            },
+            "type": "list"
+          }
+        },
+        "short_description": "Install and configure the web application"
+      }
+    },
+    "path": "/tmp/ansible-mcp-work/project/roles/webapp"
+  }
+}

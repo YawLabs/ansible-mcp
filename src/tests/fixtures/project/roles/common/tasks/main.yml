@@ -1,0 +1,11 @@
+---
+- name: Timezone
+  community.general.timezone:
+    name: "{{ common_timezone | default('UTC') }}"
+
+- name: Mount data
+  mount:
+    path: /data
+    src: /dev/sdb1
+    fstype: ext4
+    state: mounted

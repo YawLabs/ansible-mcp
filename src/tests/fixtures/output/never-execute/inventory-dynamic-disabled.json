@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "hostvars": {
+      "h1": {
+        "ansible_connection": "local",
+        "lazy_lookup": "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/group-vars-lookup && echo y') }}"
+      }
+    },
+    "profile": "inventory_legacy"
+  },
+  "all": {
+    "children": ["ungrouped"]
+  },
+  "ungrouped": {
+    "hosts": ["h1"]
+  }
+}

@@ -1,0 +1,60 @@
+[
+  {
+    "name": "ANSIBLE_HOME",
+    "origin": "env: ANSIBLE_HOME",
+    "value": "/tmp/ansible-mcp-work/home"
+  },
+  {
+    "name": "ANSIBLE_NOCOLOR",
+    "origin": "env: NO_COLOR",
+    "value": true
+  },
+  {
+    "name": "COLLECTIONS_PATHS",
+    "origin": "env: ANSIBLE_COLLECTIONS_PATH",
+    "value": ["/tmp/ansible-mcp-work/collections"]
+  },
+  {
+    "name": "CONFIG_FILE",
+    "origin": "",
+    "value": "/tmp/ansible-mcp-work/project/ansible.cfg"
+  },
+  {
+    "name": "DEFAULT_FORKS",
+    "origin": "env: ANSIBLE_FORKS",
+    "value": 11
+  },
+  {
+    "name": "DEFAULT_HOST_LIST",
+    "origin": "/tmp/ansible-mcp-work/project/ansible.cfg",
+    "value": ["/tmp/ansible-mcp-work/project/inventory/hosts.yml"]
+  },
+  {
+    "name": "DEFAULT_ROLES_PATH",
+    "origin": "/tmp/ansible-mcp-work/project/ansible.cfg",
+    "value": ["/tmp/ansible-mcp-work/project/roles"]
+  },
+  {
+    "name": "GALAXY_CACHE_DIR",
+    "origin": "env: ANSIBLE_GALAXY_CACHE_DIR",
+    "value": "/tmp/ansible-mcp-work/cache/galaxy"
+  },
+  {
+    "name": "HOST_KEY_CHECKING",
+    "origin": "/tmp/ansible-mcp-work/project/ansible.cfg",
+    "value": false
+  },
+  {
+    "name": "INTERPRETER_PYTHON",
+    "origin": "/tmp/ansible-mcp-work/project/ansible.cfg",
+    "value": "auto_silent"
+  },
+  {
+    "name": "RETRY_FILES_ENABLED",
+    "origin": "/tmp/ansible-mcp-work/project/ansible.cfg",
+    "value": false
+  },
+  {
+    "GALAXY_SERVERS": {}
+  }
+]

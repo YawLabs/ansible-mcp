@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "hostvars": {
+      "h1": {
+        "ansible_connection": "local",
+        "lazy_lookup": "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/group-vars-lookup && echo y') }}",
+        "probe": {
+          "__ansible_unsafe": "x"
+        }
+      },
+      "s1": {
+        "lazy_lookup": "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/group-vars-lookup && echo y') }}",
+        "probe": {
+          "__ansible_unsafe": "x"
+        }
+      }
+    },
+    "profile": "inventory_legacy"
+  },
+  "all": {
+    "children": ["ungrouped", "scripted"]
+  },
+  "scripted": {
+    "hosts": ["s1"]
+  },
+  "ungrouped": {
+    "hosts": ["h1"]
+  }
+}

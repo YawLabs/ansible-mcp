@@ -1,0 +1,74 @@
+file	source capture	exit code	command (cwd = project copy unless noted)
+version.txt	out/version.out	0	ansible --version
+config/only-changed.json	out/config-changed.out	0	ansible-config dump --only-changed --format json
+config/only-changed-env-forks.json	out/config-changed-env.out	0	ANSIBLE_FORKS=11 ansible-config dump --only-changed --format json
+config/only-changed.txt	out/config-text-changed.out	0	ansible-config dump --only-changed
+config/galaxy-servers.json	out8/cfg-galaxy.out	0	ansible-config dump --only-changed --format json (cwd with config/galaxy-servers.ansible.cfg)
+config/galaxy-servers.txt	out8/cfg-galaxy-text.out	0	ansible-config dump --only-changed (same cwd)
+doc/copy.json	out/doc-copy.out	0	ansible-doc --json -t module ansible.builtin.copy
+doc/apt-short-name.json	out/doc-apt-short.out	0	ansible-doc --json apt
+doc/file.json	out/doc-file.out	0	ansible-doc --json ansible.builtin.file
+doc/posix-mount-1.5.4.json	out/doc-mount.out	0	ansible-doc --json ansible.posix.mount
+doc/ufw-short-name.json	out/doc-ufw-short.out	0	ansible-doc --json ufw
+doc/cg-git_config-9.5.2.json	out/doc-git-config.out	0	ansible-doc --json community.general.git_config
+doc/cg-consul_acl-9.5.2.json	out/doc-consul-acl.out	0	ansible-doc --json community.general.consul_acl
+doc/cg-consul_acl-9.5.2.stderr	out/doc-consul-acl.err	0	ansible-doc --json community.general.consul_acl
+doc/multi-copy-sysctl.json	out/doc-multi.out	0	ansible-doc --json ansible.builtin.copy ansible.posix.sysctl
+doc/missing.stdout	out/doc-missing.out	0	ansible-doc --json community.general.does_not_exist
+doc/missing.stderr	out/doc-missing.err	0	ansible-doc --json community.general.does_not_exist
+doc/missing-collection.stderr	out/doc-missing-collection.err	0	ansible-doc --json community.docker.docker_container
+doc/lookup-pipe.json	out/doc-lookup-pipe.out	0	ansible-doc --json -t lookup ansible.builtin.pipe
+doc/role-webapp.json	out/doc-role.out	0	ansible-doc --json -t role -r roles webapp
+doc/role-list.json	out/doc-role-list.out	0	ansible-doc -l -j -t role -r roles
+doc/list-module-ansible.posix.json	out/list-posix.out	0	ansible-doc -l -j -t module ansible.posix
+doc/list-lookup-ansible.builtin.json	out/list-lookup-builtin.out	0	ansible-doc -l -j -t lookup ansible.builtin
+inventory/list-no-vault-secret.stderr	out/inv-list.err	4	ansible-inventory --list (whole-file vault present, no vault secret)
+inventory/list-WITH-vault-password.json	out/inv-list-vault.out	0	ansible-inventory --list --vault-password-file <fixture password> (shows why the server never passes one)
+inventory/list.json	out7/novault-list.out	0	ansible-inventory --list (whole-file vault moved aside; inline !vault values only)
+inventory/host-web1.json	out7/novault-host-web1.out	0	ansible-inventory --host web1 (same)
+inventory/list.yaml	out7/novault-list-yaml.out	0	ansible-inventory --list --yaml (same)
+inventory/graph-vars-inline-vault.stderr	out7/novault-graph-vars.err	1	ansible-inventory --graph --vars (inline vault, no secret)
+inventory/graph.txt	out/inv-graph.out	0	ansible-inventory --graph
+inventory/list-vars-plugins-off.json	out7/vars-none-list.out	0	ANSIBLE_VARS_ENABLED=none ansible-inventory --list
+inventory/host-web1-vars-plugins-off.json	out7/vars-none-host.out	0	ANSIBLE_VARS_ENABLED=none ansible-inventory --host web1
+inventory/list-wrong-vault-password.stderr	out7/v-wrong.err	4	ANSIBLE_VAULT_PASSWORD_FILE=<random> ansible-inventory --list
+inventory/list-devnull-vault-password.stderr	out7/v-devnull.err	1	ANSIBLE_VAULT_PASSWORD_FILE=/dev/null ansible-inventory --list
+inventory/host-missing.stderr	out/inv-host-missing.err	5	ansible-inventory --host nope
+playbook/syntax-check.stdout	out/pb-syntax.out	0	ansible-playbook --syntax-check playbooks/site.yml
+playbook/syntax-check.stderr	out/pb-syntax.err	0	ansible-playbook --syntax-check playbooks/site.yml
+playbook/list-tasks.txt	out/pb-list-tasks.out	0	ansible-playbook --list-tasks playbooks/site.yml
+playbook/list-hosts.txt	out/pb-list-hosts.out	0	ansible-playbook --list-hosts playbooks/site.yml
+playbook/list-tags.txt	out/pb-list-tags.out	0	ansible-playbook --list-tags playbooks/site.yml
+playbook/list-all.txt	out/pb-list-all.out	0	ansible-playbook --list-tasks --list-hosts --list-tags playbooks/site.yml
+playbook/list-tasks-tags-db.txt	out/pb-list-tasks-limit.out	0	ansible-playbook --list-tasks --tags db playbooks/site.yml
+playbook/syntax-check-tasks-file.stderr	out/pb-syntax-badargs.err	4	ansible-playbook --syntax-check -i localhost, playbooks/tasks/bad_args.yml (a tasks file, not a playbook)
+galaxy/collection-list.json	out/galaxy-list.out	0	ansible-galaxy collection list --format json
+galaxy/collection-list-one.json	out/galaxy-list-one.out	0	ansible-galaxy collection list community.general --format json
+galaxy/collection-list.txt	out/galaxy-list-text.out	0	ansible-galaxy collection list
+galaxy/collection-list-missing.json	out/galaxy-list-missing.out	0	ansible-galaxy collection list community.docker --format json
+galaxy/collection-list-shadowed.json	out8/up-galaxy-list.out	0	ANSIBLE_COLLECTIONS_PATH=<cg-12 target>:<posix-2.0.0 target>:<user> ansible-galaxy collection list --format json
+galaxy/role-list.txt	out/galaxy-role-list.out	0	ansible-galaxy role list -p roles
+galaxy/install-bad-version.stderr	out8/dl-badversion.err	1	ansible-galaxy collection install --no-deps -p <tmp> community.general:==99.0.0
+galaxy/install-bad-name.stderr	out8/dl-badname.err	1	ansible-galaxy collection install --no-deps -p <tmp> community.zzznotreal:==1.0.0
+galaxy/install-offline.stderr	out8/dl-offline.err	1	HTTPS_PROXY=http://127.0.0.1:9 ansible-galaxy collection install --no-deps -p <tmp> ansible.posix:==1.6.2
+galaxy/install-already-present.stdout	out8/dl-reinstall.out	0	ansible-galaxy collection install --no-deps -p <cached target> ansible.posix:==2.0.0
+galaxy/install-already-present.stderr	out8/dl-reinstall.err	0	same
+lint/site.codeclimate.json	out/lint-json.out	2	ansible-lint --offline -f json playbooks/site.yml
+lint/site.stderr	out/lint-json.err	2	same
+lint/site.sarif.json	out/lint-sarif.out	2	ansible-lint --offline -f sarif playbooks/site.yml
+lint/project.codeclimate.json	out9/lint-project.out	2	ansible-lint --offline -f json (whole project)
+lint/project.stderr	out9/lint-project.err	2	same
+lint/bad-args.codeclimate.json	out9/lint-badargs.out	2	ansible-lint --offline -f json <copy of playbooks/tasks/bad_args.yml as tasks/main.yml>
+lint/bad-args.sarif.json	out9/lint-badargs-sarif.out	2	same, -f sarif
+lint/version.txt	out9/lint-version.out	0	ansible-lint --version --offline
+upgrade/docs-installed.json	out8/base-doc-used.out	0	ansible-doc --json <10 used modules> (community.general 9.5.2, ansible.posix 1.5.4)
+upgrade/docs-target.json	out8/up-doc-used.out	0	ANSIBLE_COLLECTIONS_PATH=<targets>:<user> ansible-doc --json <8 used modules> (community.general 12.0.0, ansible.posix 2.0.0)
+upgrade/target-proxmox_kvm.stdout	out8/up-doc-proxmox.out	0	target: ansible-doc --json community.general.proxmox_kvm (redirect to an uninstalled collection)
+upgrade/target-proxmox_kvm.stderr	out8/up-doc-proxmox.err	0	same
+upgrade/target-consul_acl.stderr	out8/up-doc-consul.err	1	target: ansible-doc --json community.general.consul_acl (tombstone)
+upgrade/target-multi-with-tombstone.stderr	out9/multi-tomb.err	1	target: ansible-doc --json git_config consul_acl slack (one tombstone fails the whole call)
+upgrade/target-multi-with-missing.json	out9/multi-missing.out	0	target: ansible-doc --json git_config proxmox_kvm nope
+upgrade/target-multi-with-missing.stderr	out9/multi-missing.err	0	same
+upgrade/target-syntax-check.stderr	out8/up-syntax.err	4	target: ansible-playbook --syntax-check playbooks/site.yml
+doc/list-keyword.json	(direct)	0	ansible-doc -t keyword -l -j
+doc/keywords.json	(direct)	0	ansible-doc -t keyword --json <all 60 keywords>

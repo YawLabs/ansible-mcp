@@ -1,0 +1,2 @@
+[WARNING]: Error getting vault password file (None): The vault password file provided '/tmp/ansible-mcp-work/vi' can not be a directory
+[ERROR]: The vault password file provided '/tmp/ansible-mcp-work/vi' can not be a directory

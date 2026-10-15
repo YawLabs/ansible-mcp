@@ -1,0 +1,3 @@
+postgres_max_connections: 200
+aws_secret_access_key: FIXTURE-plain-aws-secret-03
+deploy_key_note: ghp_FIXTUREplainGithubToken000000000004

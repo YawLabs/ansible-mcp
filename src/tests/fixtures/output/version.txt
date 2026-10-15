@@ -1,0 +1,9 @@
+ansible [core 2.21.5]
+  config file = /tmp/ansible-mcp-work/project/ansible.cfg
+  configured module search path = ['/tmp/ansible-mcp-work/home/plugins/modules', '/usr/share/ansible/plugins/modules']
+  ansible python module location = /tmp/ansible-mcp-venv/lib/python3.12/site-packages/ansible
+  ansible collection location = /tmp/ansible-mcp-work/collections
+  executable location = /tmp/ansible-mcp-venv/bin/ansible
+  python version = 3.12.14 (main, Aug 14 2026, 15:33:16) [Clang 22.1.3 ] (/tmp/ansible-mcp-venv/bin/python3)
+  jinja version = 3.1.6
+  pyyaml version = 6.0.3 (with libyaml v0.2.5)

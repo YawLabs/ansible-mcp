@@ -1,0 +1,14 @@
+- name: "Play {{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/play-name-lookup && echo n') }}"
+  hosts: "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/hosts-lookup && echo all') }}"
+  gather_facts: false
+  vars_files:
+    - "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/vars-files-lookup && echo vars.yml') }}"
+  tasks:
+    - name: "Task {{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/task-name-lookup && echo t') }}"
+      ansible.builtin.debug:
+        msg: "{{ lazy_lookup }}"
+      tags: [probe]
+    - name: Include with templated name
+      ansible.builtin.include_tasks: "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/include-lookup && echo inc.yml') }}"
+    - name: Import (static)
+      ansible.builtin.import_tasks: inc.yml

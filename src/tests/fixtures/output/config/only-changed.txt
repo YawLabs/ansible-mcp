@@ -1,0 +1,13 @@
+ANSIBLE_HOME(env: ANSIBLE_HOME) = /tmp/ansible-mcp-work/home
+ANSIBLE_NOCOLOR(env: NO_COLOR) = True
+COLLECTIONS_PATHS(env: ANSIBLE_COLLECTIONS_PATH) = ['/tmp/ansible-mcp-work/collections']
+CONFIG_FILE() = /tmp/ansible-mcp-work/project/ansible.cfg
+DEFAULT_FORKS(/tmp/ansible-mcp-work/project/ansible.cfg) = 7
+DEFAULT_HOST_LIST(/tmp/ansible-mcp-work/project/ansible.cfg) = ['/tmp/ansible-mcp-work/project/inventory/hosts.yml']
+DEFAULT_ROLES_PATH(/tmp/ansible-mcp-work/project/ansible.cfg) = ['/tmp/ansible-mcp-work/project/roles']
+GALAXY_CACHE_DIR(env: ANSIBLE_GALAXY_CACHE_DIR) = /tmp/ansible-mcp-work/cache/galaxy
+HOST_KEY_CHECKING(/tmp/ansible-mcp-work/project/ansible.cfg) = False
+INTERPRETER_PYTHON(/tmp/ansible-mcp-work/project/ansible.cfg) = auto_silent
+RETRY_FILES_ENABLED(/tmp/ansible-mcp-work/project/ansible.cfg) = False
+
+GALAXY_SERVERS:

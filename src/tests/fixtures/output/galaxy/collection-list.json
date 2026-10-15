@@ -1,0 +1,6 @@
+{
+  "/tmp/ansible-mcp-work/collections/ansible_collections": {
+    "ansible.posix": { "version": "1.5.4" },
+    "community.general": { "version": "9.5.2" }
+  }
+}

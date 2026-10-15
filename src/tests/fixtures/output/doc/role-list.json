@@ -1,0 +1,13 @@
+{
+  "common": {
+    "description": "UNDOCUMENTED",
+    "entry_points": {}
+  },
+  "webapp": {
+    "description": "UNDOCUMENTED",
+    "entry_points": {
+      "configure": "Only (re)write configuration files",
+      "main": "Install and configure the web application"
+    }
+  }
+}

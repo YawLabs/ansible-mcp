@@ -1,0 +1,41 @@
+---
+- name: Unknown option and bad choice
+  ansible.builtin.copy:
+    src: a.txt
+    dest: /tmp/a.txt
+    mode: "0644"
+    owner_name: root
+    backup: maybe
+    state: present
+
+- name: Missing required option
+  ansible.posix.mount:
+    src: /dev/sdb1
+    fstype: ext4
+    state: mounted
+
+- name: Legacy key=value with alias
+  ansible.builtin.file: dest=/tmp/x state=directory mode=0755
+
+- name: Mutually exclusive
+  ansible.builtin.copy:
+    src: a.txt
+    content: hello
+    dest: /tmp/b.txt
+
+- name: Deprecated option
+  community.general.git_config:
+    list_all: true
+    scope: global
+
+- name: Templated value is not checked
+  ansible.builtin.apt:
+    name: nginx
+    state: "{{ pkg_state }}"
+    update_cache: "{{ refresh | bool }}"
+
+- name: Redirected short name
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcpx

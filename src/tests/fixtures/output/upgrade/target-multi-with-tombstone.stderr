@@ -1,0 +1,1 @@
+[ERROR]: module community.general.consul_acl Missing documentation (or could not parse documentation): The 'community.general.consul_acl' module has been removed. Use community.general.consul_token and/or community.general.consul_policy instead. This feature was removed from collection 'community.general' version 10.0.0.

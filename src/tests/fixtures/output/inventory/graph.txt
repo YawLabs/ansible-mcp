@@ -1,0 +1,11 @@
+@all:
+  |--@ungrouped:
+  |--@web:
+  |  |--web1
+  |  |--web2
+  |--@db:
+  |  |--db1
+  |--@staging:
+  |  |--@web:
+  |  |  |--web1
+  |  |  |--web2

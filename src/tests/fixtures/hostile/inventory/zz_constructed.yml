@@ -1,0 +1,4 @@
+plugin: ansible.builtin.constructed
+strict: false
+compose:
+  probe: lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/constructed-compose && echo x')

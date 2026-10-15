@@ -1,0 +1,19 @@
+command	env overrides	markers touched (hostile/ fixture, ansible-core 2.21.5)
+ansible-doc --json ansible.builtin.debug	(none)	(none)
+ansible-config dump --only-changed --format json	(none)	(none)
+ansible-galaxy collection list --format json	safe set	(none)
+ansible-inventory --list	(none)	constructed-compose inventory-script vault-password-script
+ansible-inventory --graph	(none)	constructed-compose inventory-script vault-password-script
+ansible-inventory --list	ANSIBLE_VAULT_PASSWORD_FILE= (empty)	(none; exits 1: "can not be a directory")
+ansible-inventory --list	ANSIBLE_INVENTORY_ENABLED=host_list,yaml,ini,toml	vault-password-script
+ansible-inventory --list	+ ANSIBLE_VARS_ENABLED=host_group_vars	vault-password-script
+ansible-playbook --syntax-check play.yml	inventory+vars safe set	hosts-lookup play-name-lookup vars-files-lookup vars-plugin-import vault-password-script
+ansible-playbook --list-tasks play.yml	inventory+vars safe set	hosts-lookup play-name-lookup vars-files-lookup vars-plugin-import vault-password-script
+ansible-playbook --list-hosts play.yml	inventory+vars safe set	hosts-lookup play-name-lookup vars-files-lookup vars-plugin-import vault-password-script
+ansible-playbook --list-tags play.yml	inventory+vars safe set	hosts-lookup play-name-lookup vars-files-lookup vars-plugin-import vault-password-script
+ansible-playbook -i inventory/static.yml --list-hosts play.yml	inventory+vars safe set	hosts-lookup play-name-lookup vars-files-lookup vars-plugin-import vault-password-script
+ansible-lint --offline -f json play.yml	inventory+vars safe set	hosts-lookup play-name-lookup vars-files-lookup vars-plugin-import vault-password-script
+ansible-inventory --list (cfg vault_identity_list = dev@./vault-pass.sh)	(none)	vault-password-script
+ansible-inventory --list (same cfg)	ANSIBLE_VAULT_IDENTITY_LIST= (empty)	(none; exits 1: "can not be a directory")
+ansible-inventory --list (same cfg)	ANSIBLE_VAULT_IDENTITY_LIST=mcp@<random file> ANSIBLE_VAULT_PASSWORD_FILE=<random file>	(none; exit 0)
+never touched by any command: task-name-lookup include-lookup group-vars-lookup filter-plugin-import vars-plugin-get-vars

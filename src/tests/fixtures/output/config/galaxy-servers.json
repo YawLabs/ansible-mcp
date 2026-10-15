@@ -1,0 +1,163 @@
+[
+  {
+    "name": "ANSIBLE_HOME",
+    "origin": "env: ANSIBLE_HOME",
+    "value": "/tmp/ansible-mcp-work/home"
+  },
+  {
+    "name": "ANSIBLE_NOCOLOR",
+    "origin": "env: NO_COLOR",
+    "value": true
+  },
+  {
+    "name": "COLLECTIONS_PATHS",
+    "origin": "env: ANSIBLE_COLLECTIONS_PATH",
+    "value": ["/tmp/ansible-mcp-work/collections"]
+  },
+  {
+    "name": "CONFIG_FILE",
+    "origin": "",
+    "value": "/tmp/ansible-mcp-work/gcfg/ansible.cfg"
+  },
+  {
+    "name": "DEFAULT_VAULT_IDENTITY_LIST",
+    "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+    "value": ["dev@./vault-pass.sh"]
+  },
+  {
+    "name": "DEFAULT_VAULT_PASSWORD_FILE",
+    "origin": "env: ANSIBLE_VAULT_PASSWORD_FILE",
+    "value": "/tmp/ansible-mcp-work/wrong-pass.txt"
+  },
+  {
+    "name": "GALAXY_CACHE_DIR",
+    "origin": "env: ANSIBLE_GALAXY_CACHE_DIR",
+    "value": "/tmp/ansible-mcp-work/cache/galaxy"
+  },
+  {
+    "name": "GALAXY_SERVER_LIST",
+    "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+    "value": ["hub", "release_galaxy"]
+  },
+  {
+    "name": "VARIABLE_PLUGINS_ENABLED",
+    "origin": "env: ANSIBLE_VARS_ENABLED",
+    "value": ["none"]
+  },
+  {
+    "GALAXY_SERVERS": {
+      "hub": [
+        {
+          "name": "url",
+          "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+          "type": null,
+          "value": "https://hub.example.com/api/galaxy/content/published/"
+        },
+        {
+          "name": "username",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "password",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "token",
+          "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+          "type": null,
+          "value": "FIXTURE-SECRET-05"
+        },
+        {
+          "name": "auth_url",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "validate_certs",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "client_id",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "client_secret",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "timeout",
+          "origin": "default",
+          "type": null,
+          "value": 60
+        }
+      ],
+      "release_galaxy": [
+        {
+          "name": "url",
+          "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+          "type": null,
+          "value": "https://galaxy.ansible.com/"
+        },
+        {
+          "name": "username",
+          "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+          "type": null,
+          "value": "me"
+        },
+        {
+          "name": "password",
+          "origin": "/tmp/ansible-mcp-work/gcfg/ansible.cfg",
+          "type": null,
+          "value": "FIXTURE-SECRET-06"
+        },
+        {
+          "name": "token",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "auth_url",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "validate_certs",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "client_id",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "client_secret",
+          "origin": "default",
+          "type": null,
+          "value": null
+        },
+        {
+          "name": "timeout",
+          "origin": "default",
+          "type": null,
+          "value": 60
+        }
+      ]
+    }
+  }
+]

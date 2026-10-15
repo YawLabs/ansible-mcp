@@ -1,0 +1,8 @@
+[ERROR]: 'ansible.builtin.copy' is not a valid attribute for a Play
+Origin: /tmp/ansible-mcp-work/project/playbooks/tasks/bad_args.yml:3:3
+
+1 ---
+2 - name: Unknown option and bad choice
+3   ansible.builtin.copy:
+    ^ column 3
+

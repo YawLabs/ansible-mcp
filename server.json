@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.YawLabs/ansible-mcp",
+  "description": "Ansible checkout truth: module specs, task args, roles, inventory, plays, upgrade impact",
+  "title": "Ansible MCP Server",
+  "repository": {
+    "url": "https://github.com/YawLabs/ansible-mcp",
+    "source": "github",
+    "id": "1421429829"
+  },
+  "websiteUrl": "https://yaw.sh/mcp-servers/ansible-mcp/",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@yawlabs/ansible-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

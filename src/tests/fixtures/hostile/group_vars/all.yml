@@ -1,0 +1,1 @@
+lazy_lookup: "{{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/group-vars-lookup && echo y') }}"

@@ -1,0 +1,59 @@
+---
+- name: Web tier
+  hosts: web
+  become: true
+  tags: [web]
+  roles:
+    - role: webapp
+      vars:
+        webapp_server_name: app.example.com
+
+- name: Database tier
+  hosts: db
+  become: true
+  tags: [db]
+  tasks:
+    - name: Git identity
+      community.general.git_config:
+        scope: global
+        list_all: true
+      tags: [git]
+
+    - name: Proxmox VM
+      community.general.proxmox_kvm:
+        api_host: pve.example.com
+        api_user: root@pam
+        api_password: "{{ pve_password }}"
+        name: db-replica
+        node: pve1
+
+    - name: Legacy consul ACL
+      community.general.consul_acl:
+        mgmt_token: "{{ consul_mgmt_token }}"
+        name: app
+        token_type: client
+
+    - name: Notify
+      community.general.slack:
+        token: "{{ slack_token }}"
+        msg: "db deployed"
+        channel: "#ops"
+
+    - name: Enable repo
+      community.general.rhsm_repository:
+        name: rhel-9-for-x86_64-appstream-rpms
+        state: present
+
+    - name: Kernel tuning
+      ansible.posix.sysctl:
+        name: vm.swappiness
+        value: "10"
+        state: present
+      tags: [tuning]
+
+- name: All hosts
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:

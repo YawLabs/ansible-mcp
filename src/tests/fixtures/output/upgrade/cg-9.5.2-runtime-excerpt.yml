@@ -1,0 +1,8 @@
+# excerpt of community.general 9.5.2 meta/runtime.yml: requires_ansible + plugin_routing.modules entries for modules the fixture project uses
+requires_ansible: '>=2.13.0'
+plugin_routing:
+  modules:
+    consul_acl:
+      deprecation:
+        removal_version: 10.0.0
+        warning_text: Use community.general.consul_token and/or community.general.consul_policy instead.

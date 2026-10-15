@@ -1,0 +1,7 @@
+[ERROR]: Attempting to decrypt but no vault secrets found.
+Origin: /tmp/ansible-mcp-work/project/inventory/host_vars/web1.yml:2:26
+
+1 ansible_user: deploy
+2 ansible_become_password: !vault |
+                           ^ column 26
+

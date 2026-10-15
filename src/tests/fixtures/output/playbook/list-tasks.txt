@@ -1,0 +1,26 @@
+
+playbook: playbooks/site.yml
+
+  play #1 (web): Web tier	TAGS: [web]
+    tasks:
+      common : Timezone	TAGS: [web]
+      common : Mount data	TAGS: [web]
+      webapp : Validating arguments against arg spec 'main' - Install and configure the web application	TAGS: [always, web]
+      webapp : Install packages	TAGS: [packages, web]
+      webapp : Open https	TAGS: [web]
+      webapp : Firewalld service	TAGS: [web]
+      webapp : Configure	TAGS: [config, web]
+      webapp : OS specific	TAGS: [web]
+
+  play #2 (db): Database tier	TAGS: [db]
+    tasks:
+      Git identity	TAGS: [db, git]
+      Proxmox VM	TAGS: [db]
+      Legacy consul ACL	TAGS: [db]
+      Notify	TAGS: [db]
+      Enable repo	TAGS: [db]
+      Kernel tuning	TAGS: [db, tuning]
+
+  play #3 (all): All hosts	TAGS: []
+    tasks:
+      Ping	TAGS: []

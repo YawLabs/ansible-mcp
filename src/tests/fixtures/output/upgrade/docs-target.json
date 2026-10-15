@@ -1,0 +1,868 @@
+{
+  "ansible.posix.firewalld": {
+    "doc": {
+      "author": ["Adam Miller (@maxamillion)"],
+      "collection": "ansible.posix",
+      "description": [
+        "This module allows for addition or deletion of services and ports (either TCP or UDP) in either running or permanent firewalld rules."
+      ],
+      "filename": "/tmp/ansible-mcp-work/targets/ansible.posix-2.0.0/ansible_collections/ansible/posix/plugins/modules/firewalld.py",
+      "has_action": false,
+      "module": "firewalld",
+      "notes": [
+        "Not tested on any Debian based system.",
+        "Requires the python2 bindings of firewalld, which may not be installed by default.",
+        "For distributions where the python2 firewalld bindings are unavailable (e.g Fedora 28 and later) you will have to set the ansible_python_interpreter for these hosts to the python3 interpreter path and install the python3 bindings.",
+        "Zone transactions (creating, deleting) can be performed by using only the zone and state parameters \"present\" or \"absent\". Note that zone transactions must explicitly be permanent. This is a limitation in firewalld. This also means that you will have to reload firewalld after adding a zone that you wish to perform immediate actions on. The module will not take care of this for you implicitly because that would undo any previously performed immediate actions which were not permanent. Therefore, if you require immediate access to a newly created zone it is recommended you reload firewalld immediately after the zone creation returns with a changed state and before you perform any other immediate, non-permanent actions on that zone.",
+        "This module needs C(python-firewall) or C(python3-firewall) on managed nodes. It is usually provided as a subset with C(firewalld) from the OS distributor for the OS default Python interpreter."
+      ],
+      "options": {
+        "forward": {
+          "description": [
+            "The forward setting you would like to enable/disable to/from zones within firewalld.",
+            "This option only is supported by firewalld v0.9.0 or later.",
+            "Note that the option type is changed to bool in ansible.posix version 2.0.0 and later."
+          ],
+          "type": "bool"
+        },
+        "icmp_block": {
+          "description": ["The ICMP block you would like to add/remove to/from a zone in firewalld."],
+          "type": "str"
+        },
+        "icmp_block_inversion": {
+          "description": [
+            "Enable/Disable inversion of ICMP blocks for a zone in firewalld.",
+            "Note that the option type is changed to bool in ansible.posix version 2.0.0 and later."
+          ],
+          "type": "bool"
+        },
+        "immediate": {
+          "default": false,
+          "description": [
+            "Whether to apply this change to the runtime firewalld configuration.",
+            "Defaults to V(true) if O(permanent=false)."
+          ],
+          "type": "bool"
+        },
+        "interface": {
+          "description": ["The interface you would like to add/remove to/from a zone in firewalld."],
+          "type": "str"
+        },
+        "masquerade": {
+          "description": [
+            "The masquerade setting you would like to enable/disable to/from zones within firewalld.",
+            "Note that the option type is changed to bool in ansible.posix version 2.0.0 and later."
+          ],
+          "type": "bool"
+        },
+        "offline": {
+          "default": false,
+          "description": ["Ignores O(immediate) if O(permanent=true) and firewalld is not running."],
+          "type": "bool"
+        },
+        "permanent": {
+          "default": false,
+          "description": [
+            "Whether to apply this change to the permanent firewalld configuration.",
+            "As of Ansible 2.3, permanent operations can operate on firewalld configs when it is not running (requires firewalld >= 0.3.9).",
+            "Note that if this is V(false), O(immediate=true) by default."
+          ],
+          "type": "bool"
+        },
+        "port": {
+          "description": [
+            "Name of a port or port range to add/remove to/from firewalld.",
+            "Must be in the form PORT/PROTOCOL or PORT-PORT/PROTOCOL for port ranges."
+          ],
+          "type": "str"
+        },
+        "port_forward": {
+          "description": ["Port and protocol to forward using firewalld."],
+          "elements": "dict",
+          "suboptions": {
+            "port": {
+              "description": ["Source port to forward from."],
+              "required": true,
+              "type": "str"
+            },
+            "proto": {
+              "choices": ["udp", "tcp"],
+              "description": ["protocol to forward."],
+              "required": true,
+              "type": "str"
+            },
+            "toaddr": {
+              "description": ["Optional address to forward to."],
+              "type": "str"
+            },
+            "toport": {
+              "description": ["destination port."],
+              "required": true,
+              "type": "str"
+            }
+          },
+          "type": "list"
+        },
+        "protocol": {
+          "description": ["Name of a protocol to add/remove to/from firewalld."],
+          "type": "str"
+        },
+        "rich_rule": {
+          "description": [
+            "Rich rule to add/remove to/from firewalld.",
+            "See L(Syntax for firewalld rich language rules,https://firewalld.org/documentation/man-pages/firewalld.richlanguage.html)."
+          ],
+          "type": "str"
+        },
+        "service": {
+          "description": [
+            "Name of a service to add/remove to/from firewalld.",
+            "The service must be listed in output of C(firewall-cmd --get-services)."
+          ],
+          "type": "str"
+        },
+        "source": {
+          "description": ["The source/network you would like to add/remove to/from firewalld."],
+          "type": "str"
+        },
+        "state": {
+          "choices": ["absent", "disabled", "enabled", "present"],
+          "description": [
+            "Enable or disable a setting.",
+            "For ports: Should this port accept (V(enabled)) or reject (V(disabled)) connections.",
+            "The states V(present) and V(absent) can only be used in zone level operations (i.e. when no other parameters but zone and state are set)."
+          ],
+          "required": true,
+          "type": "str"
+        },
+        "target": {
+          "choices": ["default", "ACCEPT", "DROP", "%%REJECT%%"],
+          "description": ["firewalld Zone target.", "If O(state=absent), this will reset the target to default."],
+          "type": "str",
+          "version_added": "1.2.0",
+          "version_added_collection": "ansible.posix"
+        },
+        "timeout": {
+          "default": 0,
+          "description": ["The amount of time in seconds the rule should be in effect for when non-permanent."],
+          "type": "int"
+        },
+        "zone": {
+          "description": [
+            "The firewalld zone to add/remove to/from.",
+            "Note that the default zone can be configured per system but V(public) is default from upstream.",
+            "Available choices can be extended based on per-system configs, listed here are \"out of the box\" defaults.",
+            "Possible values include V(block), V(dmz), V(drop), V(external), V(home), V(internal), V(public), V(trusted), V(work)."
+          ],
+          "type": "str"
+        }
+      },
+      "plugin_name": "ansible.posix.firewalld",
+      "requirements": ["firewalld >= 0.9.0", "python-firewall >= 0.9.0"],
+      "short_description": "Manage arbitrary ports/services with firewalld"
+    },
+    "examples": "\n- name: Permanently enable https service, also enable it immediately if possible\n  ansible.posix.firewalld:\n    service: https\n    state: enabled\n    permanent: true\n    immediate: true\n    offline: true\n\n- name: Permit traffic in default zone for https service\n  ansible.posix.firewalld:\n    service: https\n    permanent: true\n    state: enabled\n\n- name: Permit ospf traffic\n  ansible.posix.firewalld:\n    protocol: ospf\n    permanent: true\n    state: enabled\n\n- name: Do not permit traffic in default zone on port 8081/tcp\n  ansible.posix.firewalld:\n    port: 8081/tcp\n    permanent: true\n    state: disabled\n\n- name: Permit traffic in default zone on port 161-162/ucp\n  ansible.posix.firewalld:\n    port: 161-162/udp\n    permanent: true\n    state: enabled\n\n- name: Permit traffic in dmz zone on http service\n  ansible.posix.firewalld:\n    zone: dmz\n    service: http\n    permanent: true\n    state: enabled\n\n- name: Enable FTP service with rate limiting using firewalld rich rule\n  ansible.posix.firewalld:\n    rich_rule: rule service name=\"ftp\" audit limit value=\"1/m\" accept\n    permanent: true\n    state: enabled\n\n- name: Allow traffic from 192.0.2.0/24 in internal zone\n  ansible.posix.firewalld:\n    source: 192.0.2.0/24\n    zone: internal\n    state: enabled\n\n- name: Assign eth2 interface to trusted zone\n  ansible.posix.firewalld:\n    zone: trusted\n    interface: eth2\n    permanent: true\n    state: enabled\n\n- name: Enable forwarding in internal zone\n  ansible.posix.firewalld:\n    forward: true\n    state: enabled\n    permanent: true\n    zone: internal\n\n- name: Enable masquerade in dmz zone\n  ansible.posix.firewalld:\n    masquerade: true\n    state: enabled\n    permanent: true\n    zone: dmz\n\n- name: Create custom zone if not already present\n  ansible.posix.firewalld:\n    zone: custom\n    state: present\n    permanent: true\n\n- name: Enable ICMP block inversion in drop zone\n  ansible.posix.firewalld:\n    zone: drop\n    state: enabled\n    permanent: true\n    icmp_block_inversion: true\n\n- name: Block ICMP echo requests in drop zone\n  ansible.posix.firewalld:\n    zone: drop\n    state: enabled\n    permanent: true\n    icmp_block: echo-request\n\n- name: Set internal zone target to ACCEPT\n  ansible.posix.firewalld:\n    zone: internal\n    state: present\n    permanent: true\n    target: ACCEPT\n\n- name: Redirect port 443 to 8443 with Rich Rule\n  ansible.posix.firewalld:\n    rich_rule: rule family=ipv4 forward-port port=443 protocol=tcp to-port=8443\n    zone: public\n    permanent: true\n    immediate: true\n    state: enabled\n",
+    "metadata": null,
+    "return": null
+  },
+  "ansible.posix.mount": {
+    "doc": {
+      "author": ["Ansible Core Team", "Seth Vidal (@skvidal)"],
+      "collection": "ansible.posix",
+      "description": ["This module controls active and configured mount points in C(/etc/fstab)."],
+      "filename": "/tmp/ansible-mcp-work/targets/ansible.posix-2.0.0/ansible_collections/ansible/posix/plugins/modules/mount.py",
+      "has_action": false,
+      "module": "mount",
+      "notes": [
+        "As of Ansible 2.3, the O(name) option has been changed to O(path) as default, but O(name) still works as well.",
+        "Using O(state=remounted) with O(opts) set may create unexpected results based on the existing options already defined on mount, so care should be taken to ensure that conflicting options are not present before hand."
+      ],
+      "options": {
+        "backup": {
+          "default": false,
+          "description": [
+            "Create a backup file including the timestamp information so you can get the original file back if you somehow clobbered it incorrectly."
+          ],
+          "type": "bool"
+        },
+        "boot": {
+          "default": true,
+          "description": [
+            "Determines if the filesystem should be mounted on boot.",
+            "Only applies to Solaris and Linux systems.",
+            "For Solaris systems, C(true) will set C(yes) as the value of mount at boot in C(/etc/vfstab).",
+            "For Linux, FreeBSD, NetBSD and OpenBSD systems, C(false) will add C(noauto) to mount options in C(/etc/fstab).",
+            "To avoid mount option conflicts, if C(noauto) specified in O(opts), mount module will ignore O(boot).",
+            "This parameter is ignored when O(state=ephemeral)."
+          ],
+          "type": "bool"
+        },
+        "dump": {
+          "default": "0",
+          "description": [
+            "Dump (see fstab(5)).",
+            "Note that if set to C(null) and O(state=present), it will cease to work and duplicate entries will be made with subsequent runs.",
+            "Has no effect on Solaris systems or when used with O(state=ephemeral)."
+          ],
+          "type": "str"
+        },
+        "fstab": {
+          "description": [
+            "File to use instead of C(/etc/fstab).",
+            "You should not use this option unless you really know what you are doing.",
+            "This might be useful if you need to configure mountpoints in a chroot environment.",
+            "OpenBSD does not allow specifying alternate fstab files with mount so do not use this on OpenBSD with any state that operates on the live filesystem.",
+            "This parameter defaults to C(/etc/fstab) or C(/etc/vfstab) on Solaris.",
+            "This parameter is ignored when O(state=ephemeral)."
+          ],
+          "type": "str"
+        },
+        "fstype": {
+          "description": ["Filesystem type.", "Required when O(state) is V(present), V(mounted), or V(ephemeral)."],
+          "type": "str"
+        },
+        "opts": {
+          "description": ["Mount options (see fstab(5), or vfstab(4) on Solaris)."],
+          "type": "str"
+        },
+        "opts_no_log": {
+          "default": false,
+          "description": ["Do not log opts."],
+          "type": "bool"
+        },
+        "passno": {
+          "default": "0",
+          "description": [
+            "Passno (see fstab(5)).",
+            "Note that if set to C(null) and O(state=present), it will cease to work and duplicate entries will be made with subsequent runs.",
+            "Deprecated on Solaris systems. Has no effect when used with O(state=ephemeral)."
+          ],
+          "type": "str"
+        },
+        "path": {
+          "aliases": ["name"],
+          "description": [
+            "Path to the mount point (e.g. C(/mnt/files)).",
+            "Before Ansible 2.3 this option was only usable as O(ignore:dest), O(ignore:destfile), and O(name)."
+          ],
+          "required": true,
+          "type": "path"
+        },
+        "src": {
+          "description": [
+            "Device (or NFS volume, or something else) to be mounted on I(path).",
+            "Required when O(state) set to V(present), V(mounted), or V(ephemeral).",
+            "Ignored when O(state) set to V(absent) or V(unmounted)."
+          ],
+          "type": "path"
+        },
+        "state": {
+          "choices": ["absent", "absent_from_fstab", "mounted", "present", "unmounted", "remounted", "ephemeral"],
+          "description": [
+            "If V(mounted), the device will be actively mounted and appropriately configured in I(fstab). If the mount point is not present, the mount point will be created.",
+            "If V(unmounted), the device will be unmounted without changing I(fstab).",
+            "V(present) only specifies that the device is to be configured in I(fstab) and does not trigger or require a mount.",
+            "V(ephemeral) only specifies that the device is to be mounted, without changing I(fstab). If it is already mounted, a remount will be triggered. This will always return RV(ignore:changed=true). If the mount point O(path) has already a device mounted on, and its source is different than O(src), the module will fail to avoid unexpected unmount or mount point override. If the mount point is not present, the mount point will be created. The I(fstab) is completely ignored. This option is added in version 1.5.0.",
+            "V(absent) specifies that the mount point entry O(path) will be removed from I(fstab) and will also unmount the mounted device and remove the mount point. A mounted device will be unmounted regardless of O(src) or its real source. V(absent) does not unmount recursively, and the module will fail if multiple devices are mounted on the same mount point. Using V(absent) with a mount point that is not registered in the I(fstab) has no effect, use V(unmounted) instead.",
+            "V(remounted) specifies that the device will be remounted for when you want to force a refresh on the mount itself (added in 2.9). This will always return RV(ignore:changed=true). If O(opts) is set, the options will be applied to the remount, but will not change I(fstab).  Additionally, if O(opts) is set, and the remount command fails, the module will error to prevent unexpected mount changes.  Try using V(mounted) instead to work around this issue.  V(remounted) expects the mount point to be present in the I(fstab). To remount a mount point not registered in I(fstab), use V(ephemeral) instead, especially with BSD nodes.",
+            "V(absent_from_fstab) specifies that the device mount's entry will be removed from I(fstab). This option does not unmount it or delete the mountpoint."
+          ],
+          "required": true,
+          "type": "str"
+        }
+      },
+      "plugin_name": "ansible.posix.mount",
+      "short_description": "Control active and configured mount points",
+      "version_added": "1.0.0",
+      "version_added_collection": "ansible.posix"
+    },
+    "examples": "\n# Before 2.3, option 'name' was used instead of 'path'\n- name: Mount DVD read-only\n  ansible.posix.mount:\n    path: /mnt/dvd\n    src: /dev/sr0\n    fstype: iso9660\n    opts: ro,noauto\n    state: present\n\n- name: Mount up device by label\n  ansible.posix.mount:\n    path: /srv/disk\n    src: LABEL=SOME_LABEL\n    fstype: ext4\n    state: present\n\n- name: Mount up device by UUID\n  ansible.posix.mount:\n    path: /home\n    src: UUID=b3e48f45-f933-4c8e-a700-22a159ec9077\n    fstype: xfs\n    opts: noatime\n    state: present\n\n- name: Unmount a mounted volume\n  ansible.posix.mount:\n    path: /tmp/mnt-pnt\n    state: unmounted\n\n- name: Remount a mounted volume\n  ansible.posix.mount:\n    path: /tmp/mnt-pnt\n    state: remounted\n\n# The following will not save changes to fstab, and only be temporary until\n# a reboot, or until calling \"state: unmounted\" followed by \"state: mounted\"\n# on the same \"path\"\n- name: Remount a mounted volume and append exec to the existing options\n  ansible.posix.mount:\n    path: /tmp\n    state: remounted\n    opts: exec\n\n- name: Mount and bind a volume\n  ansible.posix.mount:\n    path: /system/new_volume/boot\n    src: /boot\n    opts: bind\n    state: mounted\n    fstype: none\n\n- name: Mount an NFS volume\n  ansible.posix.mount:\n    src: 192.168.1.100:/nfs/ssd/shared_data\n    path: /mnt/shared_data\n    opts: rw,sync,hard\n    state: mounted\n    fstype: nfs\n\n- name: Mount NFS volumes with noauto according to boot option\n  ansible.posix.mount:\n    src: 192.168.1.100:/nfs/ssd/shared_data\n    path: /mnt/shared_data\n    opts: rw,sync,hard\n    boot: false\n    state: mounted\n    fstype: nfs\n\n- name: Mount ephemeral SMB volume\n  ansible.posix.mount:\n    src: //192.168.1.200/share\n    path: /mnt/smb_share\n    opts: \"rw,vers=3,file_mode=0600,dir_mode=0700,dom={{ ad_domain }},username={{ ad_username }},password={{ ad_password }}\"\n    opts_no_log: true\n    fstype: cifs\n    state: ephemeral\n",
+    "metadata": null,
+    "return": null
+  },
+  "ansible.posix.sysctl": {
+    "doc": {
+      "author": ["David CHANIAL (@davixx)"],
+      "collection": "ansible.posix",
+      "description": [
+        "This module manipulates sysctl entries and optionally performs a C(/sbin/sysctl -p) after changing them."
+      ],
+      "filename": "/tmp/ansible-mcp-work/targets/ansible.posix-2.0.0/ansible_collections/ansible/posix/plugins/modules/sysctl.py",
+      "has_action": false,
+      "module": "sysctl",
+      "options": {
+        "ignoreerrors": {
+          "default": false,
+          "description": ["Use this option to ignore errors about unknown keys."],
+          "type": "bool"
+        },
+        "name": {
+          "aliases": ["key"],
+          "description": ["The dot-separated path (also known as O(key)) specifying the sysctl variable."],
+          "required": true,
+          "type": "str"
+        },
+        "reload": {
+          "default": true,
+          "description": [
+            "If V(true), performs a C(/sbin/sysctl -p) if the O(sysctl_file) is updated. If V(false), does not reload C(sysctl) even if the O(sysctl_file) is updated."
+          ],
+          "type": "bool"
+        },
+        "state": {
+          "choices": ["present", "absent"],
+          "default": "present",
+          "description": ["Whether the entry should be present or absent in the sysctl file."],
+          "type": "str"
+        },
+        "sysctl_file": {
+          "default": "/etc/sysctl.conf",
+          "description": ["Specifies the absolute path to C(sysctl.conf), if not C(/etc/sysctl.conf)."],
+          "type": "path"
+        },
+        "sysctl_set": {
+          "default": false,
+          "description": ["Verify token value with the sysctl command and set with C(-w) if necessary."],
+          "type": "bool"
+        },
+        "value": {
+          "aliases": ["val"],
+          "description": ["Desired value of the sysctl key."],
+          "type": "str"
+        }
+      },
+      "plugin_name": "ansible.posix.sysctl",
+      "short_description": "Manage entries in sysctl.conf.",
+      "version_added": "1.0.0",
+      "version_added_collection": "ansible.posix"
+    },
+    "examples": "\n# Set vm.swappiness to 5 in /etc/sysctl.conf\n- ansible.posix.sysctl:\n    name: vm.swappiness\n    value: '5'\n    state: present\n\n# Remove kernel.panic entry from /etc/sysctl.conf\n- ansible.posix.sysctl:\n    name: kernel.panic\n    state: absent\n    sysctl_file: /etc/sysctl.conf\n\n# Set kernel.panic to 3 in /tmp/test_sysctl.conf\n- ansible.posix.sysctl:\n    name: kernel.panic\n    value: '3'\n    sysctl_file: /tmp/test_sysctl.conf\n    reload: false\n\n# Set ip forwarding on in /proc and verify token value with the sysctl command\n- ansible.posix.sysctl:\n    name: net.ipv4.ip_forward\n    value: '1'\n    sysctl_set: true\n\n# Set ip forwarding on in /proc and in the sysctl file and reload if necessary\n- ansible.posix.sysctl:\n    name: net.ipv4.ip_forward\n    value: '1'\n    sysctl_set: true\n    state: present\n    reload: true\n",
+    "metadata": null,
+    "return": null
+  },
+  "community.general.git_config": {
+    "doc": {
+      "attributes": {
+        "check_mode": {
+          "description": "Can run in C(check_mode) and return changed status prediction without modifying target.",
+          "support": "full"
+        },
+        "diff_mode": {
+          "description": "Returns details on what has changed (or possibly needs changing in C(check_mode)), when in diff mode.",
+          "support": "none"
+        }
+      },
+      "author": ["Matthew Gamble (@djmattyg007)", "Marius Gedminas (@mgedmin)"],
+      "collection": "community.general",
+      "description": [
+        "The M(community.general.git_config) module changes git configuration by invoking C(git config). This is needed if you do not want to use M(ansible.builtin.template) for the entire git config file (for example because you need to change just C(user.email) in C(/etc/.git/config)). Solutions involving M(ansible.builtin.command) are cumbersome or do not work correctly in check mode."
+      ],
+      "filename": "/tmp/ansible-mcp-work/targets/community.general-12.0.0/ansible_collections/community/general/plugins/modules/git_config.py",
+      "has_action": false,
+      "module": "git_config",
+      "options": {
+        "add_mode": {
+          "choices": ["add", "replace-all"],
+          "default": "replace-all",
+          "description": [
+            "Specify if a value should replace the existing value(s) or if the new value should be added alongside other values with the same name.",
+            "This option is only relevant when adding/replacing values. If O(state=absent) or values are just read out, this option is not considered."
+          ],
+          "type": "str",
+          "version_added": "8.1.0",
+          "version_added_collection": "community.general"
+        },
+        "file": {
+          "description": ["Path to an adhoc git configuration file to be managed using the V(file) scope."],
+          "type": "path",
+          "version_added": "2.0.0",
+          "version_added_collection": "community.general"
+        },
+        "name": {
+          "description": ["The name of the setting."],
+          "required": true,
+          "type": "str"
+        },
+        "repo": {
+          "description": ["Path to a git repository for reading and writing values from a specific repo."],
+          "type": "path"
+        },
+        "scope": {
+          "choices": ["file", "local", "global", "system"],
+          "description": [
+            "Specify which scope to read/set values from.",
+            "This is required when setting config values.",
+            "If this is set to V(local), you must also specify the O(repo) parameter.",
+            "If this is set to V(file), you must also specify the O(file) parameter.",
+            "It defaults to system."
+          ],
+          "type": "str"
+        },
+        "state": {
+          "choices": ["present", "absent"],
+          "default": "present",
+          "description": [
+            "Indicates the setting should be set/unset. This parameter has higher precedence than O(value) parameter: when O(state=absent) and O(value) is defined, O(value) is discarded."
+          ],
+          "type": "str"
+        },
+        "value": {
+          "description": [
+            "When specifying the name of a single setting, supply a value to set that setting to the given value.",
+            "From community.general 11.0.0 on, O(value) is required if O(state=present). To read values, use the M(community.general.git_config_info) module instead."
+          ],
+          "type": "str"
+        }
+      },
+      "plugin_name": "community.general.git_config",
+      "requirements": ["git"],
+      "short_description": "Update git configuration"
+    },
+    "examples": "\n- name: Add a setting to ~/.gitconfig\n  community.general.git_config:\n    name: alias.ci\n    scope: global\n    value: commit\n\n- name: Add a setting to ~/.gitconfig\n  community.general.git_config:\n    name: alias.st\n    scope: global\n    value: status\n\n- name: Remove a setting from ~/.gitconfig\n  community.general.git_config:\n    name: alias.ci\n    scope: global\n    state: absent\n\n- name: Add a setting to ~/.gitconfig\n  community.general.git_config:\n    name: core.editor\n    scope: global\n    value: vim\n\n- name: Add a setting system-wide\n  community.general.git_config:\n    name: alias.remotev\n    scope: system\n    value: remote -v\n\n- name: Add a setting to a system scope (default)\n  community.general.git_config:\n    name: alias.diffc\n    value: diff --cached\n\n- name: Add a setting to a system scope (default)\n  community.general.git_config:\n    name: color.ui\n    value: auto\n\n- name: Add several options for the same name\n  community.general.git_config:\n    name: push.pushoption\n    value: \"{{ item }}\"\n    add_mode: add\n  loop:\n    - merge_request.create\n    - merge_request.draft\n\n- name: Make etckeeper not complaining when it is invoked by cron\n  community.general.git_config:\n    name: user.email\n    repo: /etc\n    scope: local\n    value: 'root@{{ ansible_fqdn }}'\n",
+    "metadata": null,
+    "return": null
+  },
+  "community.general.rhsm_repository": {
+    "doc": {
+      "attributes": {
+        "check_mode": {
+          "description": "Can run in C(check_mode) and return changed status prediction without modifying target.",
+          "support": "full"
+        },
+        "diff_mode": {
+          "description": "Returns details on what has changed (or possibly needs changing in C(check_mode)), when in diff mode.",
+          "support": "full"
+        }
+      },
+      "author": "Giovanni Sciortino (@giovannisciortino)",
+      "collection": "community.general",
+      "description": [
+        "Manage (Enable/Disable) RHSM repositories to the Red Hat Subscription Management entitlement platform using the C(subscription-manager) command."
+      ],
+      "filename": "/tmp/ansible-mcp-work/targets/community.general-12.0.0/ansible_collections/community/general/plugins/modules/rhsm_repository.py",
+      "has_action": false,
+      "module": "rhsm_repository",
+      "notes": [
+        "In order to manage RHSM repositories the system must be already registered to RHSM manually or using the Ansible M(community.general.redhat_subscription) module.",
+        "It is possible to interact with C(subscription-manager) only as root, so root permissions are required to successfully run this module."
+      ],
+      "options": {
+        "name": {
+          "description": [
+            "The ID of repositories to enable.",
+            "To operate on several repositories this can accept a comma separated list or a YAML list."
+          ],
+          "elements": "str",
+          "required": true,
+          "type": "list"
+        },
+        "purge": {
+          "default": false,
+          "description": [
+            "Disable all currently enabled repositories that are not not specified in O(name). Only set this to V(true) if passing in a list of repositories to the O(name) field. Using this with C(loop) is likely not to have the desired result."
+          ],
+          "type": "bool"
+        },
+        "state": {
+          "choices": ["enabled", "disabled"],
+          "default": "enabled",
+          "description": [
+            "If state is equal to present or disabled, indicates the desired repository state.",
+            "In community.general 10.0.0 the states V(present) and V(absent) have been removed. Please use V(enabled) and V(disabled) instead."
+          ],
+          "type": "str"
+        }
+      },
+      "plugin_name": "community.general.rhsm_repository",
+      "requirements": ["subscription-manager"],
+      "short_description": "Manage RHSM repositories using the subscription-manager command"
+    },
+    "examples": "\n- name: Enable a RHSM repository\n  community.general.rhsm_repository:\n    name: rhel-7-server-rpms\n\n- name: Disable all RHSM repositories\n  community.general.rhsm_repository:\n    name: '*'\n    state: disabled\n\n- name: Enable all repositories starting with rhel-6-server\n  community.general.rhsm_repository:\n    name: rhel-6-server*\n    state: enabled\n\n- name: Disable all repositories except rhel-7-server-rpms\n  community.general.rhsm_repository:\n    name: rhel-7-server-rpms\n    purge: true\n",
+    "metadata": null,
+    "return": {
+      "repositories": {
+        "description": [
+          "The list of RHSM repositories with their states.",
+          "When this module is used to change the repository states, this list contains the updated states after the changes."
+        ],
+        "returned": "success",
+        "type": "list"
+      }
+    }
+  },
+  "community.general.slack": {
+    "doc": {
+      "attributes": {
+        "check_mode": {
+          "description": "Can run in C(check_mode) and return changed status prediction without modifying target.",
+          "support": "full"
+        },
+        "diff_mode": {
+          "description": "Returns details on what has changed (or possibly needs changing in C(check_mode)), when in diff mode.",
+          "support": "none"
+        }
+      },
+      "author": "Ramon de la Fuente (@ramondelafuente)",
+      "collection": "community.general",
+      "description": [
+        "The M(community.general.slack) module sends notifications to U(http://slack.com) using the Incoming WebHook integration."
+      ],
+      "filename": "/tmp/ansible-mcp-work/targets/community.general-12.0.0/ansible_collections/community/general/plugins/modules/slack.py",
+      "has_action": false,
+      "module": "slack",
+      "options": {
+        "attachments": {
+          "description": [
+            "Define a list of attachments. This list mirrors the Slack JSON API.",
+            "For more information, see U(https://api.slack.com/docs/attachments)."
+          ],
+          "elements": "dict",
+          "type": "list"
+        },
+        "blocks": {
+          "description": [
+            "Define a list of blocks. This list mirrors the Slack JSON API.",
+            "For more information, see U(https://api.slack.com/block-kit)."
+          ],
+          "elements": "dict",
+          "type": "list",
+          "version_added": "1.0.0",
+          "version_added_collection": "community.general"
+        },
+        "channel": {
+          "description": [
+            "Channel to send the message to. If absent, the message goes to the channel selected for the O(token)."
+          ],
+          "type": "str"
+        },
+        "color": {
+          "default": "normal",
+          "description": [
+            "Allow text to use default colors - use the default of V(normal) to not send a custom color bar at the start of the message.",
+            "Allowed values for color can be one of V(normal), V(good), V(warning), V(danger), any valid 3 digit or 6 digit hex color value."
+          ],
+          "type": "str"
+        },
+        "domain": {
+          "description": [
+            "When using new format 'Webhook token' and WebAPI tokens: this can be V(slack.com) or V(slack-gov.com) and is ignored otherwise.",
+            "When using old format 'Webhook token': Slack (sub)domain for your environment without protocol. (For example V(example.slack.com).) in Ansible 1.8 and beyond, this is deprecated and may be ignored. See token documentation for information."
+          ],
+          "type": "str"
+        },
+        "icon_emoji": {
+          "description": [
+            "Emoji for the message sender. See Slack documentation for options.",
+            "If O(icon_emoji) is set, O(icon_url) is not used."
+          ],
+          "type": "str"
+        },
+        "icon_url": {
+          "default": "https://docs.ansible.com/favicon.ico",
+          "description": ["URL for the message sender's icon."],
+          "type": "str"
+        },
+        "link_names": {
+          "choices": [1, 0],
+          "default": 1,
+          "description": ["Automatically create links for channels and usernames in O(msg)."],
+          "type": "int"
+        },
+        "message_id": {
+          "description": [
+            "Optional. Message ID to edit, instead of posting a new message.",
+            "If supplied O(channel) must be in form of C(C0xxxxxxx). use C({{ slack_response.channel }}) to get RV(ignore:channel) from previous task run.",
+            "The token needs history scope to get information on the message to edit (C(channels:history,groups:history,mpim:history,im:history)).",
+            "Corresponds to C(ts) in the Slack API (U(https://api.slack.com/messaging/modifying))."
+          ],
+          "type": "str",
+          "version_added": "1.2.0",
+          "version_added_collection": "community.general"
+        },
+        "msg": {
+          "description": [
+            "Message to send. Note that the module does not handle escaping characters. Plain-text angle brackets and ampersands should be converted to HTML entities (for example C(&) to C(&amp;)) before sending. See Slack's documentation (U(https://api.slack.com/docs/message-formatting)) for more."
+          ],
+          "type": "str"
+        },
+        "parse": {
+          "choices": ["full", "none"],
+          "description": ["Setting for the message parser at Slack."],
+          "type": "str"
+        },
+        "prepend_hash": {
+          "choices": ["always", "never", "auto"],
+          "default": "never",
+          "description": [
+            "Setting for automatically prepending a V(#) symbol on the passed in O(channel).",
+            "The V(auto) method prepends a V(#) unless O(channel) starts with one of V(#), V(@), V(C0), V(GF), V(G0), V(CP). These prefixes only cover a small set of the prefixes that should not have a V(#) prepended. Since an exact condition which O(channel) values must not have the V(#) prefix is not known, the value V(auto) for this option is deprecated in the future. It is best to explicitly set O(prepend_hash=always) or O(prepend_hash=never) to obtain the needed behavior.",
+            "Before community.general 12.0.0, the default was V(auto). It has been deprecated since community.general 10.2.0.",
+            "Note that V(auto) will be deprecated in a future version."
+          ],
+          "type": "str",
+          "version_added": "6.1.0",
+          "version_added_collection": "community.general"
+        },
+        "thread_id": {
+          "description": [
+            "Optional. Timestamp of parent message to thread this message, see U(https://api.slack.com/docs/message-threading)."
+          ],
+          "type": "str"
+        },
+        "token": {
+          "description": [
+            "Slack integration token. This authenticates you to the Slack service. Make sure to use the correct type of token, depending on what method you use.",
+            "Webhook token: Prior to Ansible 1.8, a token looked like V(3Ffe373sfhRE6y42Fg3rvf4GlK). In Ansible 1.8 and above, Ansible adapts to the new Slack API where tokens look like V(G922VJP24/D921DW937/3Ffe373sfhRE6y42Fg3rvf4GlK). If tokens are in the new format then Slack ignores any value of domain except V(slack.com) or V(slack-gov.com). If the token is in the old format the domain is required. Ansible has no control of when Slack is going to remove the old API. When Slack does that the old format is going to cease working. B(Please keep in mind the tokens are not the API tokens but are the webhook tokens.) In Slack these are found in the webhook URL which are obtained under the apps and integrations. The incoming webhooks can be added in that area. In some cases this may be locked by your Slack admin and you must request access. It is there that the incoming webhooks can be added. The key is on the end of the URL given to you in that section.",
+            "WebAPI token: Slack WebAPI requires a personal, bot or work application token. These tokens start with V(xoxp-), V(xoxb-) or V(xoxa-), for example V(xoxb-1234-56789abcdefghijklmnop). WebAPI token is required if you intend to receive thread_id. See Slack's documentation (U(https://api.slack.com/docs/token-types)) for more information."
+          ],
+          "required": true,
+          "type": "str"
+        },
+        "username": {
+          "default": "Ansible",
+          "description": ["This is the sender of the message."],
+          "type": "str"
+        },
+        "validate_certs": {
+          "default": true,
+          "description": [
+            "If V(false), SSL certificates are not validated. This should only be used on personally controlled sites using self-signed certificates."
+          ],
+          "type": "bool"
+        }
+      },
+      "plugin_name": "community.general.slack",
+      "short_description": "Send Slack notifications"
+    },
+    "examples": "\n- name: Send notification message via Slack\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    msg: '{{ inventory_hostname }} completed'\n  delegate_to: localhost\n\n- name: Send notification message via Slack all options\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    msg: '{{ inventory_hostname }} completed'\n    channel: '#ansible'\n    thread_id: '1539917263.000100'\n    username: 'Ansible on {{ inventory_hostname }}'\n    icon_url: http://www.example.com/some-image-file.png\n    link_names: 0\n    parse: 'none'\n  delegate_to: localhost\n\n- name: Insert a color bar in front of the message for visibility purposes and use the default webhook icon and name configured\n    in Slack\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    msg: '{{ inventory_hostname }} is alive!'\n    color: good\n    username: ''\n    icon_url: ''\n\n- name: Insert a color bar in front of the message with valid hex color value\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    msg: 'This message uses color in hex value'\n    color: '#00aacc'\n    username: ''\n    icon_url: ''\n\n- name: Use the attachments API\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    attachments:\n      - text: Display my system load on host A and B\n        color: '#ff00dd'\n        title: System load\n        fields:\n          - title: System A\n            value: \"load average: 0,74, 0,66, 0,63\"\n            short: true\n          - title: System B\n            value: 'load average: 5,16, 4,64, 2,43'\n            short: true\n\n- name: Use the blocks API\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    blocks:\n      - type: section\n        text:\n          type: mrkdwn\n          text: |-\n            *System load*\n            Display my system load on host A and B\n      - type: context\n        elements:\n          - type: mrkdwn\n            text: |-\n              *System A*\n              load average: 0,74, 0,66, 0,63\n          - type: mrkdwn\n            text: |-\n              *System B*\n              load average: 5,16, 4,64, 2,43\n\n- name: Send a message with a link using Slack markup\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    msg: We sent this message using <https://www.ansible.com|Ansible>!\n\n- name: Send a message with angle brackets and ampersands\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    msg: This message has &lt;brackets&gt; &amp; ampersands in plain text.\n\n- name: Initial Threaded Slack message\n  community.general.slack:\n    channel: '#ansible'\n    token: xoxb-1234-56789abcdefghijklmnop\n    msg: 'Starting a thread with my initial post.'\n  register: slack_response\n- name: Add more info to thread\n  community.general.slack:\n    channel: '#ansible'\n    token: xoxb-1234-56789abcdefghijklmnop\n    thread_id: \"{{ slack_response['ts'] }}\"\n    color: good\n    msg: 'And this is my threaded response!'\n\n- name: Send a message to be edited later on\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    channel: '#ansible'\n    msg: Deploying something...\n  register: slack_response\n- name: Edit message\n  community.general.slack:\n    token: thetoken/generatedby/slack\n    # The 'channel' option does not accept the channel name. It must use the 'channel_id',\n    # which can be retrieved for example from 'slack_response' from the previous task.\n    channel: \"{{ slack_response.channel }}\"\n    msg: Deployment complete!\n    message_id: \"{{ slack_response.ts }}\"\n",
+    "metadata": null,
+    "return": null
+  },
+  "community.general.timezone": {
+    "doc": {
+      "attributes": {
+        "check_mode": {
+          "description": "Can run in C(check_mode) and return changed status prediction without modifying target.",
+          "support": "full"
+        },
+        "diff_mode": {
+          "description": "Returns details on what has changed (or possibly needs changing in C(check_mode)), when in diff mode.",
+          "support": "full"
+        }
+      },
+      "author": [
+        "Shinichi TAMURA (@tmshn)",
+        "Jasper Lievisse Adriaanse (@jasperla)",
+        "Indrajit Raychaudhuri (@indrajitr)"
+      ],
+      "collection": "community.general",
+      "description": [
+        "This module configures the timezone setting, both of the system clock and of the hardware clock. If you want to set up the NTP, use M(ansible.builtin.service) module.",
+        "It is recommended to restart C(crond) after changing the timezone, otherwise the jobs may run at the wrong time.",
+        "Several different tools are used depending on the OS/Distribution involved. For Linux it can use C(timedatectl) or edit C(/etc/sysconfig/clock) or C(/etc/timezone) and C(hwclock). On SmartOS, C(sm-set-timezone), for macOS, C(systemsetup), for BSD, C(/etc/localtime) is modified. On AIX, C(chtz) is used.",
+        "Make sure that the zoneinfo files are installed with the appropriate OS package, like C(tzdata) (usually always installed, when not using a minimal installation like Alpine Linux).",
+        "Windows and HPUX are not supported, please let us know if you find any other OS/distro in which this fails."
+      ],
+      "filename": "/tmp/ansible-mcp-work/targets/community.general-12.0.0/ansible_collections/community/general/plugins/modules/timezone.py",
+      "has_action": false,
+      "module": "timezone",
+      "notes": [
+        "On Ubuntu 24.04 and Debian 13 (Trixie), the C(util-linux-extra) package is required to provide the C(hwclock) command.",
+        "On SmartOS the C(sm-set-timezone) utility (part of the smtools package) is required to set the zone timezone.",
+        "On AIX only Olson/tz database timezones are usable (POSIX is not supported). An OS reboot is also required on AIX for the new timezone setting to take effect. Note that AIX 6.1+ is needed (OS level 61 or newer)."
+      ],
+      "options": {
+        "hwclock": {
+          "aliases": ["rtc"],
+          "choices": ["local", "UTC"],
+          "description": [
+            "Whether the hardware clock is in UTC or in local timezone.",
+            "Default is to keep current setting.",
+            "Note that this option is recommended not to change and may fail to configure, especially on virtual environments such as AWS.",
+            "B(At least one) of O(name) and O(hwclock) are required.",
+            "I(Only used on Linux)."
+          ],
+          "type": "str"
+        },
+        "name": {
+          "description": [
+            "Name of the timezone for the system clock.",
+            "Default is to keep current setting.",
+            "B(At least one) of O(name) and O(hwclock) are required."
+          ],
+          "type": "str"
+        }
+      },
+      "plugin_name": "community.general.timezone",
+      "short_description": "Configure timezone setting"
+    },
+    "examples": "\n- name: Set timezone to Asia/Tokyo\n  become: true\n  community.general.timezone:\n    name: Asia/Tokyo\n",
+    "metadata": null,
+    "return": null
+  },
+  "community.general.ufw": {
+    "doc": {
+      "attributes": {
+        "check_mode": {
+          "description": "Can run in C(check_mode) and return changed status prediction without modifying target.",
+          "support": "full"
+        },
+        "diff_mode": {
+          "description": "Returns details on what has changed (or possibly needs changing in C(check_mode)), when in diff mode.",
+          "support": "none"
+        }
+      },
+      "author": ["Aleksey Ovcharenko (@ovcharenko)", "Jarno Keskikangas (@pyykkis)", "Ahti Kitsik (@ahtik)"],
+      "collection": "community.general",
+      "description": ["Manage firewall with UFW."],
+      "filename": "/tmp/ansible-mcp-work/targets/community.general-12.0.0/ansible_collections/community/general/plugins/modules/ufw.py",
+      "has_action": false,
+      "module": "ufw",
+      "notes": [
+        "See C(man ufw) for more examples.",
+        "B(Warning:) Whilst the module itself can be run using concurrent strategies, C(ufw) does not support concurrency, as firewall rules are meant to be ordered and parallel executions do not guarantee order. B(Do not use concurrency:) The results are unpredictable and the module may fail silently if you do."
+      ],
+      "options": {
+        "comment": {
+          "description": ["Add a comment to the rule. Requires UFW version >=0.35."],
+          "type": "str"
+        },
+        "default": {
+          "aliases": ["policy"],
+          "choices": ["allow", "deny", "reject"],
+          "description": ["Change the default policy for incoming or outgoing traffic."],
+          "type": "str"
+        },
+        "delete": {
+          "default": false,
+          "description": [
+            "Delete rule.",
+            "If O(delete=true) and a value is provided for O(insert), then O(insert) is ignored."
+          ],
+          "type": "bool"
+        },
+        "direction": {
+          "choices": ["in", "incoming", "out", "outgoing", "routed"],
+          "description": [
+            "Select direction for a rule or default policy command. Mutually exclusive with O(interface_in) and O(interface_out)."
+          ],
+          "type": "str"
+        },
+        "from_ip": {
+          "aliases": ["from", "src"],
+          "default": "any",
+          "description": ["Source IP address."],
+          "type": "str"
+        },
+        "from_port": {
+          "description": ["Source port."],
+          "type": "str"
+        },
+        "insert": {
+          "description": [
+            "Insert the corresponding rule as rule number NUM.",
+            "Note that ufw numbers rules starting with 1.",
+            "If O(delete=true) and a value is provided for O(insert), then O(insert) is ignored."
+          ],
+          "type": "int"
+        },
+        "insert_relative_to": {
+          "choices": ["first-ipv4", "first-ipv6", "last-ipv4", "last-ipv6", "zero"],
+          "default": "zero",
+          "description": [
+            "Allows to interpret the index in O(insert) relative to a position.",
+            "V(zero) interprets the rule number as an absolute index (that is, 1 is the first rule).",
+            "V(first-ipv4) interprets the rule number relative to the index of the first IPv4 rule, or relative to the position where the first IPv4 rule would be if there is currently none.",
+            "V(last-ipv4) interprets the rule number relative to the index of the last IPv4 rule, or relative to the position where the last IPv4 rule would be if there is currently none.",
+            "V(first-ipv6) interprets the rule number relative to the index of the first IPv6 rule, or relative to the position where the first IPv6 rule would be if there is currently none.",
+            "V(last-ipv6) interprets the rule number relative to the index of the last IPv6 rule, or relative to the position where the last IPv6 rule would be if there is currently none."
+          ],
+          "type": "str"
+        },
+        "interface": {
+          "aliases": ["if"],
+          "description": [
+            "Specify interface for the rule. The direction (in or out) used for the interface depends on the value of O(direction). See O(interface_in) and O(interface_out) for routed rules that needs to supply both an input and output interface. Mutually exclusive with O(interface_in) and O(interface_out)."
+          ],
+          "type": "str"
+        },
+        "interface_in": {
+          "aliases": ["if_in"],
+          "description": [
+            "Specify input interface for the rule. This is mutually exclusive with O(direction) and O(interface). However, it is compatible with O(interface_out) for routed rules."
+          ],
+          "type": "str",
+          "version_added": "0.2.0",
+          "version_added_collection": "community.general"
+        },
+        "interface_out": {
+          "aliases": ["if_out"],
+          "description": [
+            "Specify output interface for the rule. This is mutually exclusive with O(direction) and O(interface). However, it is compatible with O(interface_in) for routed rules."
+          ],
+          "type": "str",
+          "version_added": "0.2.0",
+          "version_added_collection": "community.general"
+        },
+        "log": {
+          "default": false,
+          "description": ["Log new connections matched to this rule."],
+          "type": "bool"
+        },
+        "logging": {
+          "choices": ["on", "off", "low", "medium", "high", "full"],
+          "description": ["Toggles logging. Logged packets use the LOG_KERN syslog facility."],
+          "type": "str"
+        },
+        "name": {
+          "aliases": ["app"],
+          "description": ["Use profile located in C(/etc/ufw/applications.d)."],
+          "type": "str"
+        },
+        "proto": {
+          "aliases": ["protocol"],
+          "choices": ["any", "tcp", "udp", "ipv6", "esp", "ah", "gre", "igmp", "vrrp"],
+          "description": ["TCP/IP protocol.", "The value V(vrrp) is supported since community.general 10.3.0."],
+          "type": "str"
+        },
+        "route": {
+          "default": false,
+          "description": ["Apply the rule to routed/forwarded packets."],
+          "type": "bool"
+        },
+        "rule": {
+          "choices": ["allow", "deny", "limit", "reject"],
+          "description": ["Add firewall rule."],
+          "type": "str"
+        },
+        "state": {
+          "choices": ["disabled", "enabled", "reloaded", "reset"],
+          "description": [
+            "V(enabled) reloads firewall and enables firewall on boot.",
+            "V(disabled) unloads firewall and disables firewall on boot.",
+            "V(reloaded) reloads firewall.",
+            "V(reset) disables and resets firewall to installation defaults."
+          ],
+          "type": "str"
+        },
+        "to_ip": {
+          "aliases": ["dest", "to"],
+          "default": "any",
+          "description": ["Destination IP address."],
+          "type": "str"
+        },
+        "to_port": {
+          "aliases": ["port"],
+          "description": ["Destination port."],
+          "type": "str"
+        }
+      },
+      "plugin_name": "community.general.ufw",
+      "requirements": ["C(ufw) package"],
+      "short_description": "Manage firewall with UFW"
+    },
+    "examples": "\n- name: Allow everything and enable UFW\n  community.general.ufw:\n    state: enabled\n    policy: allow\n\n- name: Set logging\n  community.general.ufw:\n    logging: 'on'\n\n# Sometimes it is desirable to let the sender know when traffic is\n# being denied, rather than simply ignoring it. In these cases, use\n# reject instead of deny. In addition, log rejected connections:\n- community.general.ufw:\n    rule: reject\n    port: auth\n    log: true\n\n# ufw supports connection rate limiting, which is useful for protecting\n# against brute-force login attacks. ufw will deny connections if an IP\n# address has attempted to initiate 6 or more connections in the last\n# 30 seconds. See  http://www.debian-administration.org/articles/187\n# for details. Typical usage is:\n- community.general.ufw:\n    rule: limit\n    port: ssh\n    proto: tcp\n\n# Allow OpenSSH. (Note that as ufw manages its own state, simply removing\n# a rule=allow task can leave those ports exposed. Either use delete=true\n# or a separate state=reset task)\n- community.general.ufw:\n    rule: allow\n    name: OpenSSH\n\n- name: Delete OpenSSH rule\n  community.general.ufw:\n    rule: allow\n    name: OpenSSH\n    delete: true\n\n- name: Deny all access to port 53\n  community.general.ufw:\n    rule: deny\n    port: '53'\n\n- name: Allow port range 60000-61000\n  community.general.ufw:\n    rule: allow\n    port: 60000:61000\n    proto: tcp\n\n- name: Allow all access to tcp port 80\n  community.general.ufw:\n    rule: allow\n    port: '80'\n    proto: tcp\n\n- name: Allow all access from RFC1918 networks to this host\n  community.general.ufw:\n    rule: allow\n    src: '{{ item }}'\n  loop:\n    - 10.0.0.0/8\n    - 172.16.0.0/12\n    - 192.168.0.0/16\n\n- name: Deny access to udp port 514 from host 1.2.3.4 and include a comment\n  community.general.ufw:\n    rule: deny\n    proto: udp\n    src: 1.2.3.4\n    port: '514'\n    comment: Block syslog\n\n- name: Allow incoming access to eth0 from 1.2.3.5 port 5469 to 1.2.3.4 port 5469\n  community.general.ufw:\n    rule: allow\n    interface: eth0\n    direction: in\n    proto: udp\n    src: 1.2.3.5\n    from_port: '5469'\n    dest: 1.2.3.4\n    to_port: '5469'\n\n# Note that IPv6 must be enabled in /etc/default/ufw for IPv6 firewalling to work.\n- name: Deny all traffic from the IPv6 2001:db8::/32 to tcp port 25 on this host\n  community.general.ufw:\n    rule: deny\n    proto: tcp\n    src: 2001:db8::/32\n    port: '25'\n\n- name: Deny all IPv6 traffic to tcp port 20 on this host\n  # this should be the first IPv6 rule\n  community.general.ufw:\n    rule: deny\n    proto: tcp\n    port: '20'\n    to_ip: \"::\"\n    insert: 0\n    insert_relative_to: first-ipv6\n\n- name: Deny all IPv4 traffic to tcp port 20 on this host\n  # This should be the third to last IPv4 rule\n  # (insert: -1 addresses the second to last IPv4 rule;\n  #  so the new rule will be inserted before the second\n  #  to last IPv4 rule, and will be come the third to last\n  #  IPv4 rule.)\n  community.general.ufw:\n    rule: deny\n    proto: tcp\n    port: '20'\n    to_ip: \"::\"\n    insert: -1\n    insert_relative_to: last-ipv4\n\n# Can be used to further restrict a global FORWARD policy set to allow\n- name: Deny forwarded/routed traffic from subnet 1.2.3.0/24 to subnet 4.5.6.0/24\n  community.general.ufw:\n    rule: deny\n    route: true\n    src: 192.0.2.0/24\n    dest: 198.51.100.0/24\n",
+    "metadata": null,
+    "return": null
+  }
+}

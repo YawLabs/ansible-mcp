@@ -1,0 +1,7 @@
+webapp_port: 8080
+webapp_tls_mode: self_signed
+webapp_admin_password: FIXTURE-plain-default-pass-05
+webapp_upstreams: []
+webapp_packages:
+  - nginx
+  - python3-venv

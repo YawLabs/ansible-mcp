@@ -1,0 +1,20 @@
+
+playbook: playbooks/site.yml
+
+  play #1 (web): Web tier	TAGS: [web]
+    pattern: ['web']
+    hosts (2):
+      web1
+      web2
+
+  play #2 (db): Database tier	TAGS: [db]
+    pattern: ['db']
+    hosts (1):
+      db1
+
+  play #3 (all): All hosts	TAGS: []
+    pattern: ['all']
+    hosts (3):
+      web1
+      web2
+      db1

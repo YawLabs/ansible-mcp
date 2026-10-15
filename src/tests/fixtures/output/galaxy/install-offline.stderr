@@ -1,0 +1,10 @@
+[WARNING]: The specified collections path '/tmp/ansible-mcp-work/targets/err3' is not part of the configured Ansible collections paths '/tmp/ansible-mcp-work/collections'. The installed collection will not be picked up in an Ansible run, unless within a playbook-adjacent collections directory.
+[WARNING]: Skipping Galaxy server https://galaxy.ansible.com/api/. Got an unexpected error when getting available versions of collection ansible.posix: Unknown error when attempting to call Galaxy at 'https://galaxy.ansible.com/api/v3/collections/ansible/posix/': <urlopen error [Errno 111] Connection refused>
+[ERROR]: Unknown error when attempting to call Galaxy at 'https://galaxy.ansible.com/api/v3/collections/ansible/posix/': <urlopen error [Errno 111] Connection refused>
+
+Unknown error when attempting to call Galaxy at 'https://galaxy.ansible.com/api/v3/collections/ansible/posix/'.
+
+<<< caused by >>>
+
+<urlopen error [Errno 111] Connection refused>
+

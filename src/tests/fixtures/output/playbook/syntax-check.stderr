@@ -1,0 +1,9 @@
+[WARNING]: Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+[DEPRECATION WARNING]: community.general.consul_acl has been deprecated. Use community.general.consul_token and/or community.general.consul_policy instead. This feature will be removed from collection 'community.general' version 10.0.0.
+Origin: /tmp/ansible-mcp-work/project/playbooks/site.yml:31:7
+
+29
+30     - name: Legacy consul ACL
+31       community.general.consul_acl:
+         ^ column 7
+

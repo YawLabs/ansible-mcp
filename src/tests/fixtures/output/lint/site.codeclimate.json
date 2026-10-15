@@ -1,0 +1,34 @@
+[
+  {
+    "type": "issue",
+    "check_name": "yaml[truthy]",
+    "categories": ["formatting", "yaml"],
+    "url": "https://docs.ansible.com/projects/lint/rules/yaml/",
+    "severity": "major",
+    "description": "Truthy value should be one of [false, true]",
+    "fingerprint": "84db1cf854ad9510f284ea8056455ece7467fece3d46d70e9921aa12b17fcfbb",
+    "location": { "path": "roles/webapp/meta/argument_specs.yml", "lines": { "begin": 19 } }
+  },
+  {
+    "type": "issue",
+    "check_name": "no-free-form",
+    "categories": ["syntax", "risk"],
+    "url": "https://docs.ansible.com/projects/lint/rules/no-free-form/",
+    "severity": "major",
+    "description": "Avoid using free-form when calling module actions. (ufw)",
+    "fingerprint": "7cb474c4d0309bdedf8ab649b720e76b3ca140471ba2495ec8f7d427735271b3",
+    "location": { "path": "roles/webapp/tasks/main.yml", "lines": { "begin": 9 } },
+    "content": { "body": "ufw" }
+  },
+  {
+    "type": "issue",
+    "check_name": "fqcn[action]",
+    "categories": ["formatting"],
+    "url": "https://docs.ansible.com/projects/lint/rules/fqcn/",
+    "severity": "major",
+    "description": "Use FQCN for module actions, such `community.general.ufw`.",
+    "fingerprint": "782edd716359edc384bd31ce2c22e974bd14f939c46b150f6d053ceb3d144d7e",
+    "location": { "path": "roles/webapp/tasks/main.yml", "positions": { "begin": { "line": 10, "column": 3 } } },
+    "content": { "body": "Action `ufw` is not FQCN." }
+  }
+]

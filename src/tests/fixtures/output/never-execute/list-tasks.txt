@@ -1,0 +1,8 @@
+
+playbook: play.yml
+
+  play #1 (all): Play n	TAGS: []
+    tasks:
+      Task {{ lookup('ansible.builtin.pipe', 'mkdir -p /tmp/ansible-mcp-marks && touch /tmp/ansible-mcp-marks/task-name-lookup && echo t') }}	TAGS: [probe]
+      Include with templated name	TAGS: []
+      Included	TAGS: []

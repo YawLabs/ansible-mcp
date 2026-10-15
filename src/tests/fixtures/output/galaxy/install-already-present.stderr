@@ -1,0 +1,1 @@
+[WARNING]: The specified collections path '/tmp/ansible-mcp-work/targets/ansible.posix-2.0.0' appears to be part of the pip Ansible package. Managing these directly with ansible-galaxy could break the Ansible package. Install collections to a configured collections path, which will take precedence over collections found in the PYTHONPATH.

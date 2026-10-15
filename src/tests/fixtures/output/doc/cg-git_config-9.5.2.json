@@ -1,0 +1,111 @@
+{
+  "community.general.git_config": {
+    "doc": {
+      "attributes": {
+        "check_mode": {
+          "description": "Can run in C(check_mode) and return changed status prediction without modifying target.",
+          "support": "full"
+        },
+        "diff_mode": {
+          "description": "Will return details on what has changed (or possibly needs changing in C(check_mode)), when in diff mode.",
+          "support": "none"
+        }
+      },
+      "author": ["Matthew Gamble (@djmattyg007)", "Marius Gedminas (@mgedmin)"],
+      "collection": "community.general",
+      "description": [
+        "The M(community.general.git_config) module changes git configuration by invoking C(git config). This is needed if you do not want to use M(ansible.builtin.template) for the entire git config file (for example because you need to change just C(user.email) in /etc/.git/config).  Solutions involving M(ansible.builtin.command) are cumbersome or do not work correctly in check mode."
+      ],
+      "filename": "/tmp/ansible-mcp-work/collections/ansible_collections/community/general/plugins/modules/git_config.py",
+      "has_action": false,
+      "module": "git_config",
+      "options": {
+        "add_mode": {
+          "choices": ["add", "replace-all"],
+          "default": "replace-all",
+          "description": [
+            "Specify if a value should replace the existing value(s) or if the new value should be added alongside other values with the same name.",
+            "This option is only relevant when adding/replacing values. If O(state=absent) or values are just read out, this option is not considered."
+          ],
+          "type": "str",
+          "version_added": "8.1.0",
+          "version_added_collection": "community.general"
+        },
+        "file": {
+          "description": ["Path to an adhoc git configuration file to be managed using the V(file) scope."],
+          "type": "path",
+          "version_added": "2.0.0",
+          "version_added_collection": "community.general"
+        },
+        "list_all": {
+          "default": false,
+          "description": [
+            "List all settings (optionally limited to a given O(scope)).",
+            "This option is B(deprecated) and will be removed from community.general 11.0.0. Please use M(community.general.git_config_info) instead."
+          ],
+          "type": "bool"
+        },
+        "name": {
+          "description": [
+            "The name of the setting. If no value is supplied, the value will be read from the config if it has been set."
+          ],
+          "type": "str"
+        },
+        "repo": {
+          "description": ["Path to a git repository for reading and writing values from a specific repo."],
+          "type": "path"
+        },
+        "scope": {
+          "choices": ["file", "local", "global", "system"],
+          "description": [
+            "Specify which scope to read/set values from.",
+            "This is required when setting config values.",
+            "If this is set to V(local), you must also specify the O(repo) parameter.",
+            "If this is set to V(file), you must also specify the O(file) parameter.",
+            "It defaults to system only when not using O(list_all=true)."
+          ],
+          "type": "str"
+        },
+        "state": {
+          "choices": ["present", "absent"],
+          "default": "present",
+          "description": [
+            "Indicates the setting should be set/unset. This parameter has higher precedence than O(value) parameter: when O(state=absent) and O(value) is defined, O(value) is discarded."
+          ],
+          "type": "str"
+        },
+        "value": {
+          "description": [
+            "When specifying the name of a single setting, supply a value to set that setting to the given value.",
+            "From community.general 11.0.0 on, O(value) will be required if O(state=present). To read values, use the M(community.general.git_config_info) module instead."
+          ],
+          "type": "str"
+        }
+      },
+      "plugin_name": "community.general.git_config",
+      "requirements": ["git"],
+      "short_description": "Update git configuration"
+    },
+    "examples": "\n- name: Add a setting to ~/.gitconfig\n  community.general.git_config:\n    name: alias.ci\n    scope: global\n    value: commit\n\n- name: Add a setting to ~/.gitconfig\n  community.general.git_config:\n    name: alias.st\n    scope: global\n    value: status\n\n- name: Remove a setting from ~/.gitconfig\n  community.general.git_config:\n    name: alias.ci\n    scope: global\n    state: absent\n\n- name: Add a setting to ~/.gitconfig\n  community.general.git_config:\n    name: core.editor\n    scope: global\n    value: vim\n\n- name: Add a setting system-wide\n  community.general.git_config:\n    name: alias.remotev\n    scope: system\n    value: remote -v\n\n- name: Add a setting to a system scope (default)\n  community.general.git_config:\n    name: alias.diffc\n    value: diff --cached\n\n- name: Add a setting to a system scope (default)\n  community.general.git_config:\n    name: color.ui\n    value: auto\n\n- name: Add several options for the same name\n  community.general.git_config:\n    name: push.pushoption\n    value: \"{{ item }}\"\n    add_mode: add\n  loop:\n    - merge_request.create\n    - merge_request.draft\n\n- name: Make etckeeper not complaining when it is invoked by cron\n  community.general.git_config:\n    name: user.email\n    repo: /etc\n    scope: local\n    value: 'root@{{ ansible_fqdn }}'\n",
+    "metadata": null,
+    "return": {
+      "config_value": {
+        "description": "When O(list_all=false) and value is not set, a string containing the value of the setting in name",
+        "returned": "success",
+        "sample": "vim",
+        "type": "str"
+      },
+      "config_values": {
+        "description": "When O(list_all=true), a dict containing key/value pairs of multiple configuration settings",
+        "returned": "success",
+        "sample": {
+          "alias.diffc": "diff --cached",
+          "alias.remotev": "remote -v",
+          "color.ui": "auto",
+          "core.editor": "vim"
+        },
+        "type": "dict"
+      }
+    }
+  }
+}

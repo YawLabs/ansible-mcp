@@ -1,0 +1,17 @@
+[WARNING]: Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+[DEPRECATION WARNING]: community.general.proxmox_kvm has been deprecated. The proxmox content has been moved to community.proxmox. This feature will be removed from collection 'community.general' version 15.0.0.
+Origin: /tmp/ansible-mcp-work/project/playbooks/site.yml:23:7
+
+21
+22     - name: Proxmox VM
+23       community.general.proxmox_kvm:
+         ^ column 7
+
+[ERROR]: couldn't resolve module/action 'community.general.proxmox_kvm'. This often indicates a misspelling, missing collection, or incorrect module path.
+Origin: /tmp/ansible-mcp-work/project/playbooks/site.yml:22:7
+
+20       tags: [git]
+21
+22     - name: Proxmox VM
+         ^ column 7
+

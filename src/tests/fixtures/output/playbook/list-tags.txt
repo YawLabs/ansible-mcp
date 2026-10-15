@@ -1,0 +1,11 @@
+
+playbook: playbooks/site.yml
+
+  play #1 (web): Web tier	TAGS: [web]
+      TASK TAGS: [always, config, packages, web]
+
+  play #2 (db): Database tier	TAGS: [db]
+      TASK TAGS: [db, git, tuning]
+
+  play #3 (all): All hosts	TAGS: []
+      TASK TAGS: []
