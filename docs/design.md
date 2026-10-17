@@ -443,9 +443,11 @@ dir as code you would run --syntax-check on"). It parallels terraform-cwd-mcp's 
 provider plugins.
 
 Mitigation, applied before spawning `ansible-playbook` or `ansible-lint` on a playbook: the server walks the playbook
-with its own YAML reader, following `import_playbook` with literal paths. If any play-level `hosts`, `name`,
-`vars_files` entry or `import_playbook` value contains `lookup(`, `query(`, `q(` or `pipe`, it refuses with plain
-text:
+with its own YAML reader (aliases resolved, keys included, up to an expansion limit), following `import_playbook`
+(bare, `ansible.builtin.` or `ansible.legacy.`) with literal paths. A playbook outside `dir` is scanned at its real
+path. If any play-level `hosts`, `name`, `vars_files` entry or `import_playbook` value mentions `lookup`, `query` or
+`pipe` as a word (not only as a call: Jinja can bind them first, `{% set f = lookup %}`), or the word `q` after the
+first `{{` / `{%`, it refuses with plain text:
 
 ```
 playbooks/site.yml:3 play 'Web' has a lookup in 'hosts'; Ansible would run it on this machine while parsing. Not run.
@@ -453,8 +455,12 @@ Set ANSIBLE_MCP_ALLOW_PLAY_LOOKUPS=1 to allow.
 ```
 
 It also lists any playbook-adjacent `vars_plugins/`, `library/`, `*_plugins/` dirs and cfg `*_plugins` paths in the
-output as `local plugins loaded by Ansible: vars_plugins/marker_vars.py`. The pre-scan cannot see a play keyword
-that references a variable whose value is a lookup defined elsewhere. That residue is stated, not claimed away.
+output as `local plugins loaded by Ansible: vars_plugins/marker_vars.py`. A target the pre-scan cannot fully read
+(unreadable, over 32 MiB, or past the alias limit) is refused too, as is a lint folder target, or the no-`paths`
+project walk, that has more than 200 000 entries or a folder that cannot be listed. Lint folder targets and the
+no-`paths` case are walked at any depth, skipping only ansible-lint's own excludes (`.cache`, `.git`, `.hg`, `.svn`,
+`.tox`), so every playbook ansible-lint can see is scanned. The pre-scan cannot see a play keyword that references a
+variable whose value is a lookup defined elsewhere. That residue is stated, not claimed away.
 
 R2. **Collections are code too.** `ansible-doc` parses plugin docs without importing modules, but ansible-lint's
 `args` rule imports module code (F4). That is local code from installed collections, the same trust as Ansible
@@ -558,7 +564,11 @@ Walk the detected playbooks (section 7.1), every local role they reference (role
   <all>`, filtered by `applies_to` Task/Handler (fixture `doc/keywords.json`, 60 keywords in 2.21.5), and cached per
   ansible-core version. Also `action:` / `local_action:` (string or dict form) and `with_<lookup>`.
 - **Args:** a dict, or free-form `k=v` (Ansible `parse_kv` rules: shlex-style quotes, `\=` escapes, and for
-  free-form modules the non-k=v remainder is `_raw_params`), merged with `args:`. Each arg keeps its line number.
+  free-form modules the non-k=v remainder is `_raw_params`), merged with `args:`; the action's own args win over
+  `args:`, as in Ansible's ModArgsParser. For `command`, `shell`, `raw`, `script`, `win_command` and `win_shell`
+  (`check_raw`), only `creates`, `removes`, `chdir`, `executable`, `warn`, `stdin`, `stdin_add_newline` and
+  `strip_empty_ends` become options; any other `k=v` (`env FOO=bar make`) stays in `_raw_params`. The old dict form
+  `action: {module: "command ..."}` does not get `check_raw` yet. Each arg keeps its line number.
 - **Resolution to FQCN:** names containing two dots are used as given. Short names (and every name, to follow
   redirects) are resolved in one batched `ansible-doc --json <names...>` call. `doc.plugin_name` gives the FQCN
   (verified: `ufw` -> `community.general.ufw`, `mount` -> `ansible.posix.mount`). A play or role `collections:`
@@ -638,6 +648,7 @@ Only usages that resolve into `collection` count.
 | option deprecated in target docs | DEPRECATION | (unit test) |
 | new options, added choices, removed plugins the project does not use | not listed (counted under `include_unused`) | ufw.proto gained vrrp; mount gained opts_no_log |
 | target `requires_ansible` excludes installed ansible-core | BLOCKED | (unit test; cg 12 needs >=2.17.0, posix 2.0.0 >=2.15.0, both satisfied by 2.21.5) |
+| target `requires_ansible` cannot be evaluated (e.g. `~=2.15`) | header says `could not evaluate`; verdict not BLOCKED, notes it was not checked | (unit test) |
 | a requirements.yml entry's version constraint excludes the target | INFO `requirements.yml:<line> pins '<constraint>': change it to allow <version>` | community.general ">=9.0.0,<10.0.0" |
 
 Option paths include suboptions (`dotted.path`, recursing into `suboptions` for dict and list-of-dict options). The
@@ -774,7 +785,8 @@ requirements: requirements.yml (3 collections, 1 role)
 }
 ```
 
-Annotations: READ_ONLY_LOCAL. Command: `ansible-doc --json -t <type> <name>`. The result is cached in memory (7.12).
+Annotations: READ_ONLY_LOCAL. Command: `ansible-doc --json -t <type> -- <name>` (a name starting with `-` is never
+passed). The result is cached in memory (7.12).
 The collection version comes from `ansible-galaxy collection list --format json`, matching `doc.filename` to a path
 prefix. ansible.builtin gets `ansible-core <v>`.
 
@@ -793,7 +805,8 @@ not in ansible-doc output: cross-option rules (mutually_exclusive, required_if, 
 returns: (none documented)
 ```
 
-Flags: `[required]`, `[default: x]` (JSON), `[elements: t]`, `[deprecated: removed in v, use y]`, `[no_log]`,
+Flags: `[required]`, `[default: x]` (JSON, redacted by secret-like name and value shape, so a harmless default
+such as `private_key_file` can show as redacted), `[elements: t]`, `[deprecated: removed in v, use y]`, `[no_log]`,
 `[added in <collection> <v>]` (only when newer than the installed major's x.0.0). Suboptions are indented under
 their parent. `[has action plugin]` is shown when `doc.has_action`. Module deprecation goes in the header.
 

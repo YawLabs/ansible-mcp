@@ -18,7 +18,7 @@ Your checkout has `community.general 9.5.2`; the model's training data has whate
 - **Installed, not latest** -- the source of truth is `ansible-doc --json` run against your collections paths, with redirects (`ufw` -> `community.general.ufw`) and tombstones resolved.
 - **Checks what lint skips** -- `ansible-lint`'s `args` rule skips modules with action plugins (`copy`, `template`); `ansible_check_task_args` catches their unknown options and bad values, and says plainly which cross-option rules ansible-doc cannot express.
 - **YAML 1.1 aware** -- Ansible parses YAML 1.1, so unquoted `off` is `false` and `0755` is the integer 493. The server reads YAML the same way and says when that is probably a bug.
-- **Read-only by construction** -- configured vault password scripts never run (a server-owned dummy password file replaces them), script and plugin inventory sources are off by default, and play-level lookups are refused before Ansible parses a playbook.
+- **Read-only by construction** -- configured vault password scripts never run (a server-owned dummy password file replaces them), script and plugin inventory sources are off by default, and play-level lookups are refused before Ansible parses a playbook (as is any playbook or lint target the pre-scan cannot fully read).
 - **Collection upgrade impact** -- downloads only the target version into its own cache and diffs the arg specs of the modules your tasks actually use, tied to file:line.
 - **macOS, Linux, and Windows through WSL** -- Ansible has no Windows control node; on Windows the server spawns it through `wsl.exe --exec` (no shell anywhere).
 
