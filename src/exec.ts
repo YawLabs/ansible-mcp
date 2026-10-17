@@ -353,17 +353,32 @@ export class AnsibleRunner {
     return d ? `\\\\wsl.localhost\\${d}${p.replace(/\//g, "\\")}` : null;
   }
 
-  /** The Ansible side's environment (prefix mode; learned once per process). */
+  /**
+   * The Ansible side's environment (prefix mode; learned once per process). A
+   * spawn failure, a non-zero exit or an empty listing rejects and is not
+   * cached, so the next call asks again.
+   */
   sideEnv(): Promise<Record<string, string>> {
     if (!this.prefixed) return Promise.resolve(process.env as Record<string, string>);
-    this.sideEnvCache ??= this.raw("env", [], {}).then((r) => {
-      const out: Record<string, string> = {};
-      for (const line of r.stdout.split("\n")) {
-        const i = line.indexOf("=");
-        if (i > 0) out[line.slice(0, i)] = line.slice(i + 1);
-      }
-      return out;
-    });
+    if (!this.sideEnvCache) {
+      const p = this.raw("env", [], {}).then((r) => {
+        const out: Record<string, string> = {};
+        for (const line of r.stdout.split("\n")) {
+          const i = line.indexOf("=");
+          if (i > 0) out[line.slice(0, i)] = line.slice(i + 1);
+        }
+        if (r.code !== 0 || Object.keys(out).length === 0) {
+          throw new Error(
+            `could not read the Ansible side's environment (env exit ${r.code})${r.stderr.trim() ? `: ${r.stderr.trim().slice(0, 512)}` : ""}`,
+          );
+        }
+        return out;
+      });
+      p.catch(() => {
+        this.sideEnvCache = null;
+      });
+      this.sideEnvCache = p;
+    }
     return this.sideEnvCache;
   }
 
@@ -371,7 +386,12 @@ export class AnsibleRunner {
   async sideCacheRoot(): Promise<string> {
     if (!this.prefixed) return this.localCache;
     if (this.remoteCacheOverride) return this.remoteCacheOverride;
-    const home = (await this.sideEnv()).HOME || "/tmp";
+    const home = (await this.sideEnv()).HOME;
+    if (!home) {
+      throw new Error(
+        "HOME is not set on the Ansible side, so there is no cache dir (never /tmp, F24). Set ANSIBLE_MCP_REMOTE_CACHE to an Ansible-side directory.",
+      );
+    }
     return posix.join(home, ".cache", "ansible-mcp");
   }
 
@@ -538,10 +558,23 @@ export class AnsibleRunner {
     return r.code === 0;
   }
 
-  /** Recursive delete of a `.tmp-*` dir, only under `guardRoot` (asserted). */
+  /**
+   * Recursive delete of a `.tmp-*` dir, only under `guardRoot` (asserted): the
+   * last segment must start with `.tmp-`, and no segment of either path may be
+   * `.` or `..` (a plain prefix test would accept `<root>/../x/.tmp-y`).
+   */
   async sideRemoveTemp(p: string, guardRoot: string): Promise<void> {
-    const norm = (s: string) => s.replace(/\\/g, "/").replace(/\/+$/, "");
-    if (!norm(p).startsWith(`${norm(guardRoot)}/`) || !norm(p).includes("/.tmp-")) {
+    const segs = (s: string) => s.replace(/\\/g, "/").replace(/\/+$/, "").split("/");
+    const ps = segs(p);
+    const rs = segs(guardRoot);
+    const dotted = (x: string[]) => x.some((s) => s === "." || s === "..");
+    if (
+      dotted(ps) ||
+      dotted(rs) ||
+      ps.length <= rs.length ||
+      rs.some((s, i) => s !== ps[i]) ||
+      !ps.at(-1)!.startsWith(".tmp-")
+    ) {
       throw new Error(`refusing to remove ${p}: not a temp dir under ${guardRoot}`);
     }
     if (!this.prefixed) {

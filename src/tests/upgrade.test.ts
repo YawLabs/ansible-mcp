@@ -238,15 +238,19 @@ describe("ansible_upgrade_impact rules on the real 9.5.2 -> 12.0.0 and 1.5.4 -> 
     const text = f.map((x) => x.text).join("\n");
     expect(text).not.toContain(SECRET);
     expect(text).toContain("value=a value no longer accepted");
-    // A `no_log` option's value is never echoed either.
-    const inst2 = mk({ api_password: { type: "str", choices: ["old"], no_log: true } });
-    const targ2 = mk({ api_password: { type: "str", choices: ["new"], no_log: true } });
+    // A `no_log` option's value is never echoed either: a neutral name (not
+    // secret-like) and a value the installed choices accept, so the finding
+    // exists and only no_log keeps the value out of it.
+    const inst2 = mk({ mode: { type: "str", choices: ["hunter2", "new"], no_log: true } });
+    const targ2 = mk({ mode: { type: "str", choices: ["new"], no_log: true } });
     const f2 = diffModuleUsage({
-      used: { ...task([{ name: "api_password", value: "hunter2" }]), installedDoc: inst2 },
+      used: { ...task([{ name: "mode", value: "hunter2" }]), installedDoc: inst2 },
       collection: "x.y",
       targetDoc: targ2,
     });
-    expect(f2.map((x) => x.text).join("\n")).not.toContain("hunter2");
+    const text2 = f2.map((x) => x.text).join("\n");
+    expect(text2).toContain("no longer accepted");
+    expect(text2).not.toContain("hunter2");
   });
 
   it("BLOCKED when requires_ansible excludes the installed core", () => {
@@ -270,6 +274,35 @@ describe("ansible_upgrade_impact rules on the real 9.5.2 -> 12.0.0 and 1.5.4 -> 
       warnings: [],
     });
     expect(text).toMatch(/verdict: BLOCKED \(requires_ansible '>=2.17.0' excludes ansible-core 2.14.0\)$/);
+  });
+
+  it("says requires_ansible could not be evaluated instead of NOT satisfied, and does not block", () => {
+    const text = renderUpgrade({
+      collection: "x.y",
+      installedVersion: "1.0.0",
+      targetVersion: "2.0.0",
+      dirLabel: "d",
+      core: "2.21.5",
+      requiresAnsible: "~=2.15",
+      requiresOk: undefined,
+      requiresError: 'invalid version "~=2.15" in constraint "~=2.15"',
+      dependencies: [],
+      cacheNote: "cached",
+      constraints: [],
+      used: [],
+      playbookFiles: new Set(),
+      findings: [],
+      notFollowed: [],
+      syntax: [],
+      unused: [],
+      warnings: [],
+    });
+    const lines = text.split("\n");
+    expect(lines[1]).toBe(
+      `target: requires_ansible '~=2.15' could not evaluate (invalid version "~=2.15" in constraint "~=2.15"; ansible-core 2.21.5); dependencies: none; cached`,
+    );
+    expect(text).not.toContain("NOT satisfied");
+    expect(lines.at(-1)).toBe("verdict: NO IMPACT on used modules; requires_ansible not checked");
   });
 
   it("maps ansible-galaxy failures to plain answers (F18)", () => {

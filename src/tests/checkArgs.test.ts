@@ -83,9 +83,68 @@ describe("checks beyond the fixture file", () => {
     ]);
   });
 
-  it("never echoes values of secret-like options", () => {
-    const [c] = check("community.general.slack:\n  token: 12345\n  msg: hi\n  validate_certs: nope_FIXTURE\n");
-    expect(c!.problems.join("\n")).not.toContain("12345");
+  it("never echoes values of secret-like or no_log options, even in YAML 1.1 hints", () => {
+    const db = {
+      "test.fake.svc": {
+        doc: {
+          module: "svc",
+          collection: "test.fake",
+          plugin_name: "test.fake.svc",
+          options: {
+            password: { type: "str", no_log: true, description: "x" },
+            db_password: { type: "str", description: "x" },
+            pin: { type: "str", no_log: true, choices: ["a", "b"], description: "x" },
+            shared_secret: { type: "str", choices: ["strict", "loose"], description: "x" },
+            note: { type: "str", description: "x" },
+          },
+        },
+      },
+    };
+    const yamlText = [
+      "test.fake.svc:",
+      "  password: 01234567",
+      "  db_password: yes",
+      "  pin: 98765432",
+      "  shared_secret: off",
+      "  note: 0755",
+    ].join("\n");
+    const doc = parseYaml(yamlText);
+    if (doc.root?.kind !== "map") throw new Error("expected a mapping");
+    const t = extractTask(doc.root, "t.yml", doc);
+    const c = checkTask(t, docResult(docNamesFor([t]), db));
+    expect(c.problems).toEqual([
+      "password (line 2): an unquoted value is an octal integer in YAML 1.1; quote it",
+      "db_password (line 3): an unquoted value becomes a boolean in YAML 1.1; quote it",
+      "pin (line 4): a value is not one of a|b",
+      "shared_secret (line 5): an unquoted value is a boolean in YAML 1.1, not one of strict|loose; quote it",
+      // A non-secret option still gets the full hint.
+      'note (line 6): unquoted 0755 is the octal integer 493 in YAML 1.1; quote it ("0755")',
+    ]);
+    const all = c.problems.join("\n");
+    for (const v of ["01234567", "342391", "yes", "True", "98765432", "off", "False"]) expect(all).not.toContain(v);
+  });
+
+  it("checks each item of a list option with choices but no elements", () => {
+    const db = {
+      "test.fake.feat": {
+        doc: {
+          module: "feat",
+          collection: "test.fake",
+          plugin_name: "test.fake.feat",
+          options: { features: { type: "list", choices: ["a", "b", "c"], description: "x" } },
+        },
+      },
+    };
+    const problems = (value: string) => {
+      const doc = parseYaml(`test.fake.feat:\n  features: ${value}\n`);
+      if (doc.root?.kind !== "map") throw new Error("expected a mapping");
+      const t = extractTask(doc.root, "t.yml", doc);
+      return checkTask(t, docResult(docNamesFor([t]), db)).problems;
+    };
+    expect(problems("[a, b]")).toEqual([]);
+    expect(problems("a,b")).toEqual([]);
+    expect(problems("[a, d]")).toEqual(["features (line 2): 'd' is not one of a|b|c"]);
+    expect(problems("a, d")).toEqual(["features (line 2): 'd' is not one of a|b|c"]);
   });
 
   it("does not report a `!vault` value as a type error (its type is decrypted at run time)", () => {

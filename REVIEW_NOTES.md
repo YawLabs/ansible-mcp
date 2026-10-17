@@ -61,15 +61,11 @@ regression test.
 
 ## Deferred (documented, not fixed)
 
-- **`server.json` has no `repository.id` (high at publish time).** `release.sh`
-  step 7 (`mcp-publisher publish`) validates the `io.github.YawLabs/*` namespace
-  against the GitHub repo's numeric id. It cannot be added until the repo exists.
-  CLAUDE.md already documents this as a pre-first-`release.sh` step ("add
-  `repository.id` to server.json once the GitHub repo exists"); unchanged.
-- **`package.json` `"private": true` (med at publish time).** Documented in
-  CLAUDE.md as "remove it before the first publish". `release.sh` does not strip
-  or gate it, so the first `release.sh` would fail late at `npm publish`. Left as
-  documented (matches the sibling's flow; a script gate is a house-wide change).
+- **`server.json` has no `repository.id` (high at publish time).** RESOLVED
+  for 0.1.0: the GitHub repo exists and server.json carries `repository.id`
+  (1421429829), so `mcp-publisher publish` can validate the namespace.
+- **`package.json` `"private": true` (med at publish time).** RESOLVED for
+  0.1.0: the flag was removed and 0.1.0 is published on npm.
 - **`ansible --version` / `ansible-lint --version` probes run without
   `safetyEnv` (low, contract deviation).** Only `ansible-config dump` is exempt
   by the contract, but the version probes use `quietEnv`. In ansible-core a
@@ -96,8 +92,9 @@ Run in `ansible-mcp` after the fixes: `npm run lint:fix` (no fixes),
 files; the skips are the bash-fake launcher cases and the real-Ansible
 integration suite that needs WSL collections), `npm run build` (OK),
 `npm run check:compliance` (grade A, score 100, 45/45; the oversized-input
-grader warning remains, as in the sibling). package.json keeps `"private": true`.
-The package stays private; nothing was committed and no GitHub repo was created.
+grader warning remains, as in the sibling). At the time of this pass package.json
+kept `"private": true` and no GitHub repo existed; both were resolved before the
+0.1.0 publish (see Deferred above).
 
 ## Self-review of this pass's merge fix (follow-up)
 

@@ -66,7 +66,11 @@ export class AnsibleContext {
   private readonly configCache = new Map<string, { key: string; dump: ConfigDump }>();
   private versionCache: Promise<VersionInfo> | null = null;
   private readonly fingerprints = new Map<string, { at: number; fp: Promise<string> }>();
-  private readonly docCache = new Map<string, { kind: "doc"; doc: PluginDoc } | { kind: "missing" } | Tombstone>();
+  /** Per-name doc results; `deprecations` replays the batch's warnings naming that entry on a hit. */
+  private readonly docCache = new Map<
+    string,
+    { kind: "doc" | "missing"; doc?: PluginDoc; deprecations: DocStderr["deprecations"] } | Tombstone
+  >();
   private readonly listCache = new Map<string, Record<string, string>>();
   /** Serializes ansible_upgrade_impact calls in this process. */
   upgradeLock: Promise<unknown> = Promise.resolve();
@@ -250,6 +254,9 @@ export class AnsibleContext {
    * tombstone retry (F2: one tombstone fails the whole batch, so it is recorded
    * and the batch re-run without it). `collectionsPath` overrides
    * ANSIBLE_COLLECTIONS_PATH (upgrade targets); those results are not cached.
+   * A name starting with `-` is never a plugin name: it is reported missing and
+   * never reaches argv (task keys are user data; `-M x` would be an option), and
+   * the names follow `--` besides.
    */
   async docs(
     p: Project,
@@ -263,20 +270,31 @@ export class AnsibleContext {
     const fp = cacheable ? await this.fingerprint(p) : "";
     const todo: string[] = [];
     for (const n of unique) {
+      if (n.startsWith("-")) {
+        result.missing.push(n);
+        continue;
+      }
       const c = cacheable ? this.docCache.get(`${fp}|${type}|${n}`) : undefined;
       if (!c) todo.push(n);
-      else if ("kind" in c && c.kind === "doc") result.docs.set(n, c.doc);
-      else if ("kind" in c && c.kind === "missing") result.missing.push(n);
-      else result.tombstones.push(c as Tombstone);
+      else if ("kind" in c) {
+        if (c.kind === "doc" && c.doc) result.docs.set(n, c.doc);
+        else result.missing.push(n);
+        result.deprecations.push(...c.deprecations);
+      } else result.tombstones.push(c);
     }
     const env: Record<string, string> = {};
     if (opts.collectionsPath) env.ANSIBLE_COLLECTIONS_PATH = opts.collectionsPath;
     for (let i = 0; i < todo.length; i += DOC_BATCH) {
       let batch = todo.slice(i, i + DOC_BATCH);
       for (let attempt = 0; batch.length > 0 && attempt <= batch.length; attempt++) {
-        const r = await this.runSafe(p, "ansible-doc", ["--json", "-t", type, ...(opts.extraArgs ?? []), ...batch], {
-          env,
-        });
+        const r = await this.runSafe(
+          p,
+          "ansible-doc",
+          ["--json", "-t", type, ...(opts.extraArgs ?? []), "--", ...batch],
+          {
+            env,
+          },
+        );
         const st = classifyDocStderr(r.stderr);
         if (r.code !== 0) {
           const tomb = st.tombstones.filter((t) => batch.includes(t.name));
@@ -293,12 +311,14 @@ export class AnsibleContext {
         const docs = parseDocJson(r.stdout);
         for (const n of batch) {
           const d = docs.get(n);
-          if (d) {
-            result.docs.set(n, d);
-            if (cacheable) this.docCache.set(`${fp}|${type}|${n}`, { kind: "doc", doc: d });
-          } else {
-            result.missing.push(n);
-            if (cacheable) this.docCache.set(`${fp}|${type}|${n}`, { kind: "missing" });
+          if (d) result.docs.set(n, d);
+          else result.missing.push(n);
+          if (cacheable) {
+            const deprecations = st.deprecations.filter((x) => x.name === n);
+            this.docCache.set(
+              `${fp}|${type}|${n}`,
+              d ? { kind: "doc", doc: d, deprecations } : { kind: "missing", deprecations },
+            );
           }
         }
         result.deprecations.push(...st.deprecations);

@@ -34,6 +34,11 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join, sep } from "node:path";
 
+// Same bound as bin/ansible-mcp.mjs: a wedged `oam --version` must not hang
+// release.sh step 1 (typecheck) -- a timed-out candidate is skipped like a
+// broken one.
+export const VERSION_PROBE_TIMEOUT_MS = 5_000;
+
 const isWin = process.platform === "win32";
 const exeName = isWin ? "oam.exe" : "oam";
 
@@ -114,10 +119,13 @@ export function findOam() {
       const out = execFileSync(cmd, ["--version"], {
         encoding: "utf-8",
         stdio: ["ignore", "pipe", "ignore"],
+        timeout: VERSION_PROBE_TIMEOUT_MS,
+        windowsHide: true,
       });
       return { cmd, version: out.trim(), fromBuildTree: isBuildTreeBinary(cmd) };
     } catch {
-      // Not executable, wrong arch, or a stale entry -- try the next candidate.
+      // Not executable, wrong arch, wedged (timed out), or a stale entry -- try
+      // the next candidate.
     }
   }
 

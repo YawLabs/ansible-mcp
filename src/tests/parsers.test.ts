@@ -1,5 +1,6 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { classifyDocStderr, parseDocJson, renderModuleDoc } from "../ansibleDoc.js";
 import {
   byCollection,
@@ -29,9 +30,11 @@ import { detectProject, ProjectFiles } from "../project.js";
 import { Redactor } from "../redact.js";
 import { renderRole, roleSpecsFromDocJson, roleSpecsFromNode, yaml11Choices } from "../role.js";
 import { parseYaml, toJS } from "../yaml.js";
-import { HOSTILE, PROJECT, readOut } from "./helpers.js";
+import { cleanupTempDirs, HOSTILE, PROJECT, readOut, tempDir } from "./helpers.js";
 
 const SENTINELS = /FIXTURE-SECRET|FIXTURE-plain/;
+
+afterAll(cleanupTempDirs);
 
 describe("ansible-doc parsing (F1, F2)", () => {
   it("keys by the name asked, resolves FQCN and collection from the doc", () => {
@@ -77,6 +80,40 @@ describe("ansible-doc parsing (F1, F2)", () => {
       "  proto (str) [choices: any|tcp|udp|ipv6|esp|ah|gre|igmp] [aliases: protocol] - TCP/IP protocol.",
     );
     expect(text).toContain("not in ansible-doc output: cross-option rules");
+  });
+
+  it("redacts documented option defaults by name and value shape, not only no_log", () => {
+    const d = parseDocJson(
+      JSON.stringify({
+        "test.fake.svc": {
+          doc: {
+            module: "svc",
+            collection: "test.fake",
+            plugin_name: "test.fake.svc",
+            options: {
+              api_token: { type: "str", default: "FIXTURE-SECRET-docdefault" },
+              note: { type: "str", default: "ghp_FIXTUREplainGithubToken000000000004" },
+              port: { type: "int", default: 8200 },
+            },
+          },
+        },
+      }),
+    ).get("test.fake.svc")!;
+    const text = renderModuleDoc({
+      doc: d,
+      type: "module",
+      asked: "test.fake.svc",
+      source: "test.fake 1.0.0",
+      includeReturn: false,
+      includeExamples: false,
+      descriptionChars: 160,
+      majorFloor: null,
+    });
+    expect(text).toContain("  api_token (str) [default: (redacted: secret-like name)]");
+    expect(text).toContain("  note (str) [default: (redacted: secret-like value)]");
+    expect(text).toContain("  port (int) [default: 8200]");
+    expect(text).not.toMatch(SENTINELS);
+    expect(text).not.toContain("ghp_");
   });
 });
 
@@ -342,6 +379,38 @@ describe("roles (F5)", () => {
     expect(a).toContain("dependencies: common (vars: common_timezone)");
     expect(a).toContain("    host (str) [required]");
     expect(a).not.toMatch(SENTINELS);
+  });
+
+  it("redacts argument_spec defaults by name and value shape, and feeds them to layer 2", () => {
+    const root = tempDir();
+    const roleDir = join(root, "roles", "svc");
+    mkdirSync(join(roleDir, "defaults"), { recursive: true });
+    writeFileSync(join(roleDir, "defaults", "main.yml"), "svc_note: FIXTURE-SECRET-specdefault\n");
+    const text = renderRole({
+      name: "svc",
+      origin: "local, roles/svc",
+      specs: {
+        main: {
+          options: {
+            api_token: { type: "str", default: "FIXTURE-SECRET-specdefault" },
+            note: { type: "str", default: "ghp_FIXTUREplainGithubToken000000000004" },
+            tls_mode: { type: "str", default: "self_signed" },
+          },
+        },
+      },
+      specsSource: "x",
+      roleDir,
+      files: new ProjectFiles(root),
+      descriptionChars: 160,
+      yaml11: [],
+    });
+    expect(text).toContain("  api_token (str) [default: (redacted: secret-like name)]");
+    // The same value under an innocent defaults key is caught by layer 2.
+    expect(text).toContain("  svc_note = (redacted: contains a secret value)");
+    expect(text).toContain("  note (str) [default: (redacted: secret-like value)]");
+    expect(text).toContain('  tls_mode (str) [default: "self_signed"]');
+    expect(text).not.toMatch(SENTINELS);
+    expect(text).not.toContain("ghp_");
   });
 });
 

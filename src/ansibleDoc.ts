@@ -1,3 +1,5 @@
+import { redactStandalone } from "./redact.js";
+
 /**
  * `ansible-doc --json` output (design.md F1, F2). Pure parsing and rendering.
  *
@@ -160,15 +162,13 @@ function oneLine(desc: unknown, max: number): string {
   return d;
 }
 
-const fmtDefault = (v: unknown) => JSON.stringify(v);
-
 function optionLine(name: string, o: DocOption, pad: string, descLen: number, majorFloor: string | null): string {
   const t = typeOf(o);
   const type = o.elements ? `${t} of ${o.elements}` : t;
   const flags: string[] = [];
   if (o.required) flags.push("[required]");
   if (o.default !== undefined && o.default !== null)
-    flags.push(o.no_log ? "[default: (no_log)]" : `[default: ${fmtDefault(o.default)}]`);
+    flags.push(o.no_log ? "[default: (no_log)]" : `[default: ${redactStandalone(o.default, name)}]`);
   const ch = choicesOf(o);
   if (ch) flags.push(`[choices: ${ch.map((c) => String(c)).join("|")}]`);
   if (o.aliases?.length) flags.push(`[aliases: ${o.aliases.join(", ")}]`);

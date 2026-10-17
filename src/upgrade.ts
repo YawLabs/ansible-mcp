@@ -255,7 +255,10 @@ export interface UpgradeReport {
   dirLabel: string;
   core: string;
   requiresAnsible?: string;
+  /** undefined with requiresAnsible set: not evaluated, see requiresError. */
   requiresOk?: boolean;
+  /** Why requires_ansible could not be evaluated (e.g. `~=` is not parsed). */
+  requiresError?: string;
   dependencies: string[];
   cacheNote: string;
   constraints: string[];
@@ -283,9 +286,11 @@ export function renderUpgrade(r: UpgradeReport): string {
   lines.push(
     `upgrade ${r.collection} ${r.installedVersion} -> ${r.targetVersion} (${bumpKind(r.installedVersion, r.targetVersion)}${down}) for ${r.dirLabel}`,
   );
-  const req = r.requiresAnsible
-    ? `requires_ansible '${r.requiresAnsible}' ${r.requiresOk ? "ok" : "NOT satisfied"} (ansible-core ${r.core})`
-    : "requires_ansible not declared";
+  const req = !r.requiresAnsible
+    ? "requires_ansible not declared"
+    : r.requiresOk === undefined
+      ? `requires_ansible '${r.requiresAnsible}' could not evaluate (${r.requiresError ?? "unparseable"}; ansible-core ${r.core})`
+      : `requires_ansible '${r.requiresAnsible}' ${r.requiresOk ? "ok" : "NOT satisfied"} (ansible-core ${r.core})`;
   lines.push(
     `target: ${req}; dependencies: ${r.dependencies.length ? r.dependencies.join(", ") : "none"}; ${r.cacheNote}`,
   );
@@ -343,6 +348,8 @@ export function renderUpgrade(r: UpgradeReport): string {
   else verdict = "NO IMPACT on used modules";
   if (r.requiresAnsible && r.requiresOk === false) {
     verdict = `BLOCKED (requires_ansible '${r.requiresAnsible}' excludes ansible-core ${r.core})${verdict.startsWith("BREAKING") ? `; also ${verdict}` : ""}`;
+  } else if (r.requiresAnsible && r.requiresOk === undefined) {
+    verdict += "; requires_ansible not checked";
   }
   lines.push(`verdict: ${verdict}`);
   return lines.join("\n");
@@ -475,6 +482,7 @@ export async function ensureTarget(
 
   await ctx.runner.sideMkdirp(base);
   const tmp = ctx.runner.sideJoin(base, `.tmp-${version}-${randomBytes(4).toString("hex")}`);
+  let stale: string | undefined;
   try {
     const r = await ctx.runSafe(
       p,
@@ -492,15 +500,23 @@ export async function ensureTarget(
     if (!m || m.collection_info?.version !== version) {
       throw new Error(`ansible-galaxy installed ${collection} but MANIFEST.json does not say ${version}.`);
     }
-    if (!(await ctx.runner.sideRename(tmp, target))) {
-      const winner = await readManifest(ctx, target, collection);
-      if (!winner)
-        throw new Error(`could not move the downloaded ${collection} ${version} into the cache at ${target}.`);
-      return { dir: target, downloaded: true, manifest: winner };
+    if (await ctx.runner.sideRename(tmp, target)) return { dir: target, downloaded: true, manifest: m };
+    // Target exists: another process won the race, or a stale tree (no
+    // MANIFEST.json, or one naming another version) sits there and would make
+    // every call re-download. Keep a correct winner; move anything else aside
+    // as a `.tmp-stale-*` sibling (removed below, or by the startup sweep).
+    const winner = await readManifest(ctx, target, collection);
+    if (winner?.collection_info?.version === version) return { dir: target, downloaded: true, manifest: winner };
+    stale = ctx.runner.sideJoin(base, `.tmp-stale-${randomBytes(4).toString("hex")}`);
+    if (!(await ctx.runner.sideRename(target, stale)) || !(await ctx.runner.sideRename(tmp, target))) {
+      throw new Error(
+        `could not move the downloaded ${collection} ${version} into the cache at ${target} (it holds ${winner ? `a tree that says ${winner.collection_info?.version ?? "no version"}` : "no MANIFEST.json"}); remove that directory and retry.`,
+      );
     }
     return { dir: target, downloaded: true, manifest: m };
   } finally {
     await ctx.runner.sideRemoveTemp(tmp, root).catch(() => {});
+    if (stale) await ctx.runner.sideRemoveTemp(stale, root).catch(() => {});
   }
 }
 
@@ -569,7 +585,7 @@ async function runUpgrade(ctx: AnsibleContext, x: UpgradeParams): Promise<string
   const listRes = await ctx.runSafe(p, "ansible-galaxy", ["collection", "list", "--format", "json"]);
   if (listRes.code !== 0)
     throw new Error(
-      `ansible-galaxy collection list failed (exit ${listRes.code}):\n${listRes.stderr.trim().slice(0, 2048)}`,
+      `ansible-galaxy collection list failed (exit ${listRes.code}):\n${redactText(listRes.stderr.trim()).slice(0, 2048)}`,
     );
   const installedAll = byCollection(parseCollectionList(listRes.stdout), collectionsPaths);
   const eff = installedAll.get(collection)?.[0];
@@ -702,11 +718,13 @@ async function runUpgrade(ctx: AnsibleContext, x: UpgradeParams): Promise<string
     },
   );
   let requiresOk: boolean | undefined;
+  let requiresError: string | undefined;
   if (targetRuntime.requiresAnsible) {
     try {
       requiresOk = satisfies(ver.core.replace(/[^\d.].*$/, ""), targetRuntime.requiresAnsible);
-    } catch {
+    } catch (e) {
       requiresOk = undefined;
+      requiresError = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -760,7 +778,9 @@ async function runUpgrade(ctx: AnsibleContext, x: UpgradeParams): Promise<string
     targetVersion: version,
     dirLabel: p.dir,
     core: ver.core,
-    ...(targetRuntime.requiresAnsible ? { requiresAnsible: targetRuntime.requiresAnsible, requiresOk } : {}),
+    ...(targetRuntime.requiresAnsible
+      ? { requiresAnsible: targetRuntime.requiresAnsible, requiresOk, ...(requiresError ? { requiresError } : {}) }
+      : {}),
     dependencies: deps,
     cacheNote,
     constraints,
