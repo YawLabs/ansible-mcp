@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- R1 lookup pre-scan: YAML aliases (values and keys) are resolved, with an
+  expansion limit; any `lookup`/`query`/`pipe` mention and a bare `q` inside
+  Jinja are flagged; playbooks outside `dir` are scanned at their real path;
+  lint folder targets and the no-paths case are walked at any depth (only
+  ansible-lint's own excludes skipped); unreadable targets are refused;
+  `ansible.legacy.import_playbook` is followed.
+- Option injection: dash-leading task keys and role names never reach
+  ansible-doc, and dash-leading paths are refused after normalization (a
+  `./--fix` lint target no longer becomes `--fix`).
+- Redaction: argument_spec and upgrade-report defaults are redacted; learned
+  secrets are hidden after in-place URL / inline-credential masking;
+  password-only URLs (`redis://:pw@h`) are masked; YAML 1.1 hints no longer
+  echo secret values; the inventory fallback learns inventory vars first.
+
+### Fixed
+- `ansible_check_task_args`: free-form modules keep non-option `k=v` in the
+  command (Ansible's check_raw); the action's own args win over `args:`; list
+  options with choices but no `elements` are checked per item.
+- `ansible_module_doc`: a deprecated, missing name answers the same on repeat
+  calls (the doc cache keeps deprecations).
+- The Ansible-side cache never falls back to `/tmp`, and a failed `env` probe
+  is not cached; the temp-dir removal guard rejects `..`.
+- `ansible_upgrade_impact`: an unevaluable `requires_ansible` says "could not
+  evaluate"; a corrupt cached target is moved aside instead of failing every
+  call; the cached manifest version is checked; galaxy errors are redacted.
+- `release.sh`: refuses a dirty tree, a main behind origin, a missing `jq`,
+  and an existing tag that is not HEAD; oam probes have timeouts.
+
 ## [0.1.0] -- 2026-10-15
 
 ### Added
