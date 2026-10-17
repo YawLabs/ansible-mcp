@@ -5,6 +5,7 @@ import { ProjectFiles, walkPlaybooks } from "../project.js";
 import {
   constraintLines,
   diffModuleUsage,
+  ensureTarget,
   type Finding,
   mapGalaxyError,
   parseRuntime,
@@ -253,6 +254,61 @@ describe("ansible_upgrade_impact rules on the real 9.5.2 -> 12.0.0 and 1.5.4 -> 
     expect(text2).not.toContain("hunter2");
   });
 
+  it("redacts documented defaults in BEHAVIOR CHANGE lines: no_log and secret-shaped values (design.md 5)", () => {
+    const mk = (options: Record<string, unknown>): PluginDoc =>
+      parseDocJson(
+        JSON.stringify({
+          "x.y.mod": {
+            doc: {
+              plugin_name: "x.y.mod",
+              collection: "x.y",
+              filename: "/t/ansible_collections/x/y/plugins/modules/mod.py",
+              options,
+            },
+          },
+        }),
+      ).get("x.y.mod")!;
+    const SHAPE = "sk-abcdefghijklmnopqrstuvwx";
+    const inst = mk({
+      endpoint: { type: "str", default: "https://api.example.com" },
+      mode: { type: "str", default: "hunter2-old" },
+      plain: { type: "str", default: "auto" },
+    });
+    const targ = mk({
+      endpoint: { type: "str", default: SHAPE },
+      mode: { type: "str", default: "hunter2-new", no_log: true },
+      plain: { type: "str", default: "never" },
+    });
+    const f = diffModuleUsage({
+      used: {
+        task: {
+          file: "a.yml",
+          line: 5,
+          startLine: 4,
+          endLine: 9,
+          args: [],
+          form: "dict",
+          collections: [],
+          duplicates: [],
+          pluginRefs: [],
+        } as any,
+        fqcn: "x.y.mod",
+        installedDoc: inst,
+      },
+      collection: "x.y",
+      targetDoc: targ,
+    });
+    const lines = f.map((x) => x.text);
+    expect(lines).toEqual([
+      "endpoint not set; default 'https://api.example.com' -> (redacted: secret-like value)",
+      "mode not set; default (no_log) -> (no_log)",
+      "plain not set; default 'auto' -> 'never'",
+    ]);
+    const text = lines.join("\n");
+    expect(text).not.toContain(SHAPE);
+    expect(text).not.toContain("hunter2");
+  });
+
   it("BLOCKED when requires_ansible excludes the installed core", () => {
     const text = renderUpgrade({
       collection: "x.y",
@@ -321,5 +377,77 @@ describe("ansible_upgrade_impact rules on the real 9.5.2 -> 12.0.0 and 1.5.4 -> 
     expect(constraintLines([{ file: "requirements.yml", text: req }], "ansible.posix", "1.5.4", "2.0.0")).toEqual([
       "requirements.yml:5 pins '2.0.0' (satisfied by the target; installed 1.5.4 violates it today)",
     ]);
+  });
+});
+
+describe("ensureTarget: a stale tree at the cache target (U6)", () => {
+  /** In-memory Ansible side: dir -> MANIFEST version (null = tree without MANIFEST.json). */
+  function fakeCtx(failRename: (from: string, to: string) => boolean) {
+    const trees = new Map<string, string | null>([["/c/collections/x.y/2.0.0", "1.0.0"]]);
+    const removed: string[] = [];
+    const runner = {
+      prefixed: true,
+      cfg: { timeoutMs: 1000 },
+      sideJoin: (...parts: string[]) => parts.join("/"),
+      sideCacheRoot: async () => "/c",
+      sideEnv: async () => ({ HOME: "/home/u" }),
+      sideMkdirp: async () => {},
+      sideReadFile: async (path: string) => {
+        const m = /^(.*)\/ansible_collections\/x\/y\/MANIFEST\.json$/.exec(path);
+        if (!m) return null;
+        const v = trees.get(m[1]!);
+        return v ? JSON.stringify({ collection_info: { version: v } }) : null;
+      },
+      sideRename: async (from: string, to: string) => {
+        if (trees.has(to) || !trees.has(from) || failRename(from, to)) return false;
+        trees.set(to, trees.get(from)!);
+        trees.delete(from);
+        return true;
+      },
+      sideRemoveTemp: async (path: string) => {
+        removed.push(path);
+        trees.delete(path);
+      },
+      raw: async () => ({ code: 0, stdout: "", stderr: "" }),
+    };
+    const ctx = {
+      runner,
+      config: async () => ({ settings: [] }),
+      runSafe: async (_p: unknown, _cmd: string, args: string[]) => {
+        trees.set(args[args.indexOf("-p") + 1]!, "2.0.0");
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    } as any;
+    return { ctx, trees, removed };
+  }
+
+  it("refuses with a clear error and leaves the stale tree in place when it cannot be moved aside", async () => {
+    const { ctx, trees, removed } = fakeCtx((from) => from.endsWith("/2.0.0"));
+    await expect(ensureTarget(ctx, { dir: "/p" } as any, "x.y", "2.0.0")).rejects.toThrow(
+      "could not move the downloaded x.y 2.0.0 into the cache at /c/collections/x.y/2.0.0 (it holds a tree that says 1.0.0); remove that directory and retry.",
+    );
+    // No partial state: the old tree is untouched, the download is cleaned up,
+    // and no .tmp-stale-* sibling was created.
+    expect([...trees]).toEqual([["/c/collections/x.y/2.0.0", "1.0.0"]]);
+    expect(removed).toHaveLength(1);
+    expect(removed[0]).toMatch(/^\/c\/collections\/x\.y\/\.tmp-2\.0\.0-[0-9a-f]{8}$/);
+  });
+
+  it("removes both temp dirs when the stale tree moved aside but the download cannot take its place", async () => {
+    const { ctx, trees, removed } = fakeCtx((from) => /\.tmp-2\.0\.0-/.test(from));
+    await expect(ensureTarget(ctx, { dir: "/p" } as any, "x.y", "2.0.0")).rejects.toThrow(/could not move/);
+    expect([...trees]).toEqual([]);
+    expect(removed.map((r) => r.replace(/[0-9a-f]{8}$/, "*"))).toEqual([
+      "/c/collections/x.y/.tmp-2.0.0-*",
+      "/c/collections/x.y/.tmp-stale-*",
+    ]);
+  });
+
+  it("replaces the stale tree when both moves succeed", async () => {
+    const { ctx, trees, removed } = fakeCtx(() => false);
+    const t = await ensureTarget(ctx, { dir: "/p" } as any, "x.y", "2.0.0");
+    expect(t).toMatchObject({ dir: "/c/collections/x.y/2.0.0", downloaded: true });
+    expect([...trees]).toEqual([["/c/collections/x.y/2.0.0", "2.0.0"]]);
+    expect(removed).toHaveLength(2);
   });
 });

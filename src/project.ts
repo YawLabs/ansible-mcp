@@ -97,6 +97,50 @@ export function isFreeForm(fqcnOrName: string): boolean {
   return FREE_FORM.has(parts[parts.length - 1]!);
 }
 
+/**
+ * Ansible's FREEFORM_ACTIONS (constants.MODULE_REQUIRE_ARGS): the modules whose
+ * k=v text parse_kv reads with check_raw, so only CHECK_RAW_OPTIONS become
+ * options and every other token stays in `_raw_params` (`command: env FOO=bar make`).
+ */
+const CHECK_RAW_MODULES = new Set(["command", "raw", "script", "shell", "win_command", "win_shell"]);
+const CHECK_RAW_OPTIONS = new Set([
+  "creates",
+  "removes",
+  "chdir",
+  "executable",
+  "warn",
+  "stdin",
+  "stdin_add_newline",
+  "strip_empty_ends",
+]);
+
+export function isCheckRawAction(action: string): boolean {
+  const parts = action.split(".");
+  if (parts.length === 1) return CHECK_RAW_MODULES.has(action);
+  if (parts.length !== 3) return false;
+  if (parts[0] === "ansible" && (parts[1] === "builtin" || parts[1] === "legacy"))
+    return CHECK_RAW_MODULES.has(parts[2]!);
+  return parts[0] === "ansible" && parts[1] === "windows" && /^win_(command|shell)$/.test(parts[2]!);
+}
+
+/** Play keys that import a playbook (ansible-core's _ACTION_IMPORT_PLAYBOOK). */
+export const IMPORT_PLAYBOOK_KEYS = [
+  "import_playbook",
+  "ansible.builtin.import_playbook",
+  "ansible.legacy.import_playbook",
+];
+
+const isPlayKey = (k: string) => k === "hosts" || IMPORT_PLAYBOOK_KEYS.includes(k);
+
+/** The import_playbook entry of a play, under any of its names (the last one written wins). */
+export function importPlaybookEntry(play: YNode): YNode | undefined {
+  if (play.kind !== "map") return undefined;
+  for (let i = play.entries.length - 1; i >= 0; i--) {
+    if (IMPORT_PLAYBOOK_KEYS.includes(play.entries[i]!.key)) return play.entries[i]!.value;
+  }
+  return undefined;
+}
+
 const INCLUDE_TASKS = new Set(["include_tasks", "import_tasks", "include"]);
 const INCLUDE_ROLE = new Set(["include_role", "import_role"]);
 const builtinName = (a: string) => a.replace(/^ansible\.(builtin|legacy)\./, "");
@@ -154,8 +198,12 @@ function unquote(v: string): string {
   return v;
 }
 
-/** Ansible's parse_kv: `k=v` pairs, everything else joined into `_raw_params`. */
-export function parseKv(s: string): Record<string, string> {
+/**
+ * Ansible's parse_kv: `k=v` pairs, everything else joined into `_raw_params`.
+ * With `checkRaw` (the free-form command modules) only the command options
+ * become options; other `k=v` tokens stay in `_raw_params`, in order.
+ */
+export function parseKv(s: string, checkRaw = false): Record<string, string> {
   const options: Record<string, string> = {};
   const raw: string[] = [];
   for (const tok of splitArgs(s)) {
@@ -172,7 +220,7 @@ export function parseKv(s: string): Record<string, string> {
     }
     const k = tok.slice(0, pos).trim();
     // A quote before the `=` means the `=` is inside a quoted string: raw text.
-    if (/["']/.test(k)) {
+    if (/["']/.test(k) || (checkRaw && !CHECK_RAW_OPTIONS.has(k))) {
       raw.push(tok);
       continue;
     }
@@ -273,7 +321,7 @@ export function extractTask(
     if (v.kind === "scalar" && typeof v.value === "string") {
       const [mod, ...rest] = splitArgs(v.value);
       t.action = mod;
-      const kv = parseKv(rest.join(" "));
+      const kv = parseKv(rest.join(" "), !!mod && isCheckRawAction(mod));
       t.form = "kv";
       t.args = Object.entries(kv).map(([k, val]) => ({ name: k, line: v.line, value: val }));
     } else if (v.kind === "map") {
@@ -297,13 +345,20 @@ export function extractTask(
     } else if (actionNode.kind === "scalar" && actionNode.value !== null && actionNode.value !== undefined) {
       t.form = "kv";
       const text = typeof actionNode.value === "string" ? actionNode.value : String(actionNode.value);
-      t.args = Object.entries(parseKv(text)).map(([k, val]) => ({ name: k, line: actionNode!.line, value: val }));
+      t.args = Object.entries(parseKv(text, isCheckRawAction(t.action!))).map(([k, val]) => ({
+        name: k,
+        line: actionNode!.line,
+        value: val,
+      }));
     }
   }
-  // `args:` merges into the action's arguments.
+  // `args:` adds arguments the action does not set itself: Ansible's
+  // ModArgsParser updates the `args:` mapping with the action's own arguments.
   const argsKw = get(map, "args");
   if (argsKw?.kind === "map") {
+    const own = new Set(t.args.map((a) => a.name));
     for (const e of argsKw.entries) {
+      if (own.has(e.key)) continue;
       t.args = t.args.filter((a) => a.name !== e.key);
       t.args.push(entryArg(e.key, e.keyLine, e.value));
     }
@@ -360,13 +415,7 @@ export function tasksOf(
 /** True when a YAML root looks like a playbook: a list of mappings with hosts / import_playbook. */
 export function isPlaybookRoot(root: YNode | null): boolean {
   if (root?.kind !== "seq" || root.items.length === 0) return false;
-  return root.items.every(
-    (i) =>
-      i.kind === "map" &&
-      i.entries.some(
-        (e) => e.key === "hosts" || e.key === "import_playbook" || e.key === "ansible.builtin.import_playbook",
-      ),
-  );
+  return root.items.every((i) => i.kind === "map" && i.entries.some((e) => isPlayKey(e.key)));
 }
 
 /**
@@ -375,13 +424,7 @@ export function isPlaybookRoot(root: YNode | null): boolean {
  */
 export function isPlaybookLike(root: YNode | null): boolean {
   if (root?.kind !== "seq") return false;
-  return root.items.some(
-    (i) =>
-      i.kind === "map" &&
-      i.entries.some(
-        (e) => e.key === "hosts" || e.key === "import_playbook" || e.key === "ansible.builtin.import_playbook",
-      ),
-  );
+  return root.items.some((i) => i.kind === "map" && i.entries.some((e) => isPlayKey(e.key)));
 }
 
 // --- File access --------------------------------------------------------------
@@ -610,7 +653,7 @@ export function walkPlaybooks(files: ProjectFiles, playbooks: string[], opts: Wa
     const rel = files.rel(abs);
     for (const play of root.items) {
       if (play.kind !== "map") continue;
-      const imp = get(play, "import_playbook") ?? get(play, "ansible.builtin.import_playbook");
+      const imp = importPlaybookEntry(play);
       if (imp) {
         const target = scalarString(imp);
         if (target && !isTemplated(target)) {
@@ -716,18 +759,13 @@ function walkFiles(dir: string, depth: number, out: string[], base = dir): void 
   }
 }
 
-/** Dirs the R1 tree walk skips: VCS metadata and dependency trees (ansible-lint excludes the first set too). */
-const TREE_SKIP_DIRS = new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  ".tox",
-  ".cache",
-  "node_modules",
-  "__pycache__",
-  ".venv",
-  "venv",
-]);
+/**
+ * Dirs the R1 tree walk skips: only ansible-lint's default exclude_paths, so
+ * the pre-scan sees at least everything lint can (lint lists files through
+ * `git ls-files --cached --others`, which includes untracked node_modules or
+ * venv trees). A project's own exclude_paths are not honoured: scanning more is safe.
+ */
+const TREE_SKIP_DIRS = new Set([".cache", ".git", ".hg", ".svn", ".tox"]);
 /** Safety bound on directory entries the R1 tree walk looks at. */
 const TREE_MAX_ENTRIES = 200_000;
 
@@ -736,7 +774,7 @@ const TREE_MAX_ENTRIES = 200_000;
  * by real path), for the R1 pre-scan of lint targets. `incomplete` says why the
  * walk could not see everything (the entry bound, or a dir it could not list).
  */
-export function yamlFilesUnder(dir: string): { files: string[]; incomplete?: string } {
+export function yamlFilesUnder(dir: string, maxEntries = TREE_MAX_ENTRIES): { files: string[]; incomplete?: string } {
   const files: string[] = [];
   const realSeen = new Set<string>();
   let entriesSeen = 0;
@@ -759,8 +797,8 @@ export function yamlFilesUnder(dir: string): { files: string[]; incomplete?: str
       return;
     }
     for (const e of entries.sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0))) {
-      if (++entriesSeen > TREE_MAX_ENTRIES) {
-        incomplete = `has more than ${TREE_MAX_ENTRIES} entries to pre-scan`;
+      if (++entriesSeen > maxEntries) {
+        incomplete = `has more than ${maxEntries} entries to pre-scan`;
         return;
       }
       const p = join(d, e.name);

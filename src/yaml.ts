@@ -159,6 +159,18 @@ export function parseYaml(src: string): YamlDoc {
     return out;
   };
 
+  /**
+   * An alias used as a mapping key (`*h : all` with `&h hosts`) reads as the
+   * anchored scalar's text, as in PyYAML, through `convert` so the alias
+   * budget applies. A non-scalar anchor (unhashable in PyYAML) keeps the text.
+   */
+  const aliasKey = (k: unknown, fallbackLine: number): string => {
+    const conv = convert(k, fallbackLine);
+    return conv.kind === "scalar" && conv.value !== null && typeof conv.value !== "object"
+      ? String(conv.value)
+      : String(k);
+  };
+
   const convert = (node: unknown, fallbackLine: number): YNode => {
     if (node === null || node === undefined) return NULL_SCALAR(fallbackLine);
     if (isAlias(node)) {
@@ -212,7 +224,13 @@ export function parseYaml(src: string): YamlDoc {
           for (const e of mergeEntries(item.value)) merged.push(e);
           continue;
         }
-        const keyText = isScalar(k) ? String((k as Scalar).value) : k ? String(k) : "";
+        const keyText = isScalar(k)
+          ? String((k as Scalar).value)
+          : isAlias(k)
+            ? aliasKey(k, start)
+            : k
+              ? String(k)
+              : "";
         const keyLine = line(k?.range?.[0]) || start;
         if (seen.has(keyText)) duplicates.push({ key: keyText, line: keyLine });
         seen.add(keyText);
