@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { choicesOf, type DocOption, subOptionsOf, typeOf } from "./ansibleDoc.js";
 import { findMain, isDir, isFile, type ProjectFiles, type RoleDep, roleDependencies } from "./project.js";
-import { NO_LOG, Redactor } from "./redact.js";
+import { NO_LOG, Redactor, redactStandalone } from "./redact.js";
 import { get, getEntry, isYaml11BoolWord, toJS, type YNode } from "./yaml.js";
 
 /**
@@ -142,7 +142,7 @@ function optionLines(
     const flags: string[] = [];
     if (o.required) flags.push("[required]");
     if (o.default !== undefined && o.default !== null)
-      flags.push(o.no_log ? "[default: (no_log)]" : `[default: ${JSON.stringify(o.default)}]`);
+      flags.push(o.no_log ? "[default: (no_log)]" : `[default: ${redactStandalone(o.default, name)}]`);
     const ch = choicesOf(o);
     if (ch) flags.push(`[choices: ${ch.map(String).join("|")}]`);
     if (o.no_log) flags.push("[no_log]");
@@ -198,13 +198,18 @@ export function renderRole(r: RoleRender): string {
   if (defaults) {
     const noLog = new Set<string>();
     const documented = new Set<string>();
+    const red = new Redactor();
     for (const e of Object.values(specs)) {
       for (const [k, o] of Object.entries(e.options ?? {})) {
         documented.add(k);
         if (o.no_log) noLog.add(k);
+        // A documented default hidden in the option list is a secret for layer 2
+        // too: a copy of it under an innocent defaults key must not print.
+        if (o.default === undefined || o.default === null) continue;
+        if (!o.no_log) red.learn(o.default, [k]);
+        else if (typeof o.default === "string") red.addSecret(o.default);
       }
     }
-    const red = new Redactor();
     for (const [k, v] of Object.entries(defaults.values)) {
       if (noLog.has(k)) {
         if (typeof v === "string") red.addSecret(v);

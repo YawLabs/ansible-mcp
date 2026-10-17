@@ -202,7 +202,8 @@ const SHAPES: RegExp[] = [
 
 const VAULT_TEXT = /^\s*\$ANSIBLE_VAULT;/;
 
-const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/]+):([^\s@/]+)@/gi;
+// The username may be empty: `redis://:password@host` is Redis's documented form.
+const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/]*):([^\s@/]+)@/gi;
 
 export function hasSecretShape(s: string): boolean {
   return SHAPES.some((re) => re.test(s));
@@ -384,16 +385,20 @@ export class Redactor {
         return new Hidden(REDACTED_VALUE);
       }
       // A string carrying its own credentials is surgically masked, not
-      // blanket-redacted: the substring match below must not fire on a URL
-      // merely because it contains the password `learn()` recorded from it.
+      // blanket-redacted: the substring match must not fire on a URL merely
+      // because it contains the password `learn()` recorded from it. So layer 2
+      // runs on the MASKED string, which still catches a secret learned
+      // elsewhere (`https://u:pw@h/<learned secret>`).
       const url = maskUrlPasswords(v);
       if (url !== null) this.counts.url++;
       const inline = maskInlineCredentials(url ?? v);
-      if (inline !== null) {
-        this.counts.shape++;
-        return inline;
+      if (inline !== null) this.counts.shape++;
+      const masked = inline ?? url;
+      if (masked !== null) {
+        if (!this.matches(masked)) return masked;
+        this.counts.value++;
+        return new Hidden(REDACTED_VALUE);
       }
-      if (url !== null) return url;
       if (this.matches(v)) {
         this.counts.value++;
         return new Hidden(REDACTED_VALUE);
@@ -441,6 +446,18 @@ export class Redactor {
     if (c.url) parts.push(`${c.url} URL password${c.url === 1 ? "" : "s"}`);
     return parts.length ? `redacted: ${parts.join(", ")}` : "";
   }
+}
+
+/**
+ * One value printed on its own under one key, outside any document pass (a
+ * module or role option's documented default): layers 1, 3 and 4. Layer 2 needs
+ * a document, so a caller that has one should `learn()` the value into its own
+ * Redactor instead.
+ */
+export function redactStandalone(value: unknown, key: string): string {
+  const red = new Redactor();
+  red.learn(value, [key]);
+  return red.render(value, [key]);
 }
 
 /** Compact JSON with Hidden leaves printed bare (top level) or as strings (nested). */

@@ -88,6 +88,16 @@ const pyFalse = {
 
 const NULL_SCALAR = (line: number): YScalar => ({ kind: "scalar", value: null, line, raw: "" });
 
+/**
+ * Resolved aliases share one converted node, so a walk over the tree visits an
+ * anchored subtree once per alias: nested aliases ("billion laughs") grow that
+ * exponentially. Past this many expanded nodes an alias reads as null and the
+ * document carries an error starting with ALIAS_LIMIT_ERROR (callers that must
+ * not miss content, like the R1 pre-scan, refuse such a file).
+ */
+const MAX_ALIAS_EXPANSION = 100_000;
+export const ALIAS_LIMIT_ERROR = "alias expansion limit exceeded";
+
 /** Parse every document in `src` (Ansible reads only the first for most files). */
 export function parseYaml(src: string): YamlDoc {
   const lc = new LineCounter();
@@ -112,13 +122,29 @@ export function parseYaml(src: string): YamlDoc {
   const line = (offset: number | undefined) => (offset === undefined ? 0 : lc.linePos(offset).line);
 
   /**
-   * Nodes already converted, so a merge anchor is not converted twice (its
+   * Nodes already converted, so an anchored node is not converted twice (its
    * duplicate keys would be reported once per use). `inProgress` breaks a
-   * self-referential merge (`a: &a {<<: *a}`), which would otherwise recurse
-   * forever.
+   * self-referential merge or alias (`a: &a {<<: *a}`, `a: &a [*a]`), which
+   * would otherwise recurse forever.
    */
   const convertedCache = new WeakMap<object, YNode>();
   const inProgress = new WeakSet<object>();
+  /** Expanded node count of each converted node, charged to the alias budget on each alias use. */
+  const sizes = new WeakMap<YNode, number>();
+  let aliasBudget = MAX_ALIAS_EXPANSION;
+  let aliasLimitHit = false;
+  const sizeOf = (y: YNode): number => {
+    const known = sizes.get(y);
+    if (known !== undefined) return known;
+    const n =
+      y.kind === "scalar"
+        ? 1
+        : y.kind === "seq"
+          ? y.items.reduce((a, i) => a + sizeOf(i), 1)
+          : y.entries.reduce((a, e) => a + sizeOf(e.value), 1);
+    sizes.set(y, n);
+    return n;
+  };
 
   /** Entries of a `<<:` merge value: one alias, or a sequence of them. */
   const mergeEntries = (node: unknown): YEntry[] => {
@@ -136,8 +162,20 @@ export function parseYaml(src: string): YamlDoc {
   const convert = (node: unknown, fallbackLine: number): YNode => {
     if (node === null || node === undefined) return NULL_SCALAR(fallbackLine);
     if (isAlias(node)) {
-      // Resolve aliases to the anchored node's value (rare in Ansible content).
-      return NULL_SCALAR(line((node as Node).range?.[0]));
+      // Resolve aliases to the anchored node's value, as PyYAML does: the
+      // lookup pre-scan (R1) must see `hosts: *h` as the anchored string. The
+      // result keeps the anchor's line (where the text is); the cache shares
+      // it, and `inProgress` breaks a self-referential alias (`a: &a [*a]`).
+      const target = (node as { resolve(doc: unknown): Node | null | undefined }).resolve(docs[0]);
+      const aliasLine = line((node as Node).range?.[0]);
+      if (!target || aliasLimitHit) return NULL_SCALAR(aliasLine);
+      const out = convert(target, aliasLine);
+      aliasBudget -= sizeOf(out);
+      if (aliasBudget < 0) {
+        aliasLimitHit = true;
+        return NULL_SCALAR(aliasLine);
+      }
+      return out;
     }
     const n = node as Node;
     const cached = convertedCache.get(n);
@@ -217,6 +255,7 @@ export function parseYaml(src: string): YamlDoc {
     for (const e of d.errors) errors.push(e.message.split("\n")[0]!);
     if (i === 0) root = d.contents ? convert(d.contents, 1) : null;
   }
+  if (aliasLimitHit) errors.push(`${ALIAS_LIMIT_ERROR} (more than ${MAX_ALIAS_EXPANSION} nodes through aliases)`);
   return { root, errors, duplicates };
 }
 

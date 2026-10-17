@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, posix } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, posix } from "node:path";
 import { get, isTemplated, parseYaml, scalarString, toJS, type YamlDoc, type YMap, type YNode } from "./yaml.js";
 
 /**
@@ -369,34 +369,61 @@ export function isPlaybookRoot(root: YNode | null): boolean {
   );
 }
 
+/**
+ * Looser than isPlaybookRoot, for the R1 pre-scan of directory trees: a list
+ * with at least one play (hosts / import_playbook) is treated as a playbook.
+ */
+export function isPlaybookLike(root: YNode | null): boolean {
+  if (root?.kind !== "seq") return false;
+  return root.items.some(
+    (i) =>
+      i.kind === "map" &&
+      i.entries.some(
+        (e) => e.key === "hosts" || e.key === "import_playbook" || e.key === "ansible.builtin.import_playbook",
+      ),
+  );
+}
+
 // --- File access --------------------------------------------------------------
 
 const MAX_YAML_BYTES = 2 * 1024 * 1024;
 
 export class ProjectFiles {
-  private readonly cache = new Map<string, YamlDoc | null>();
+  /** Per path: the parsed doc (null when unread), and the file size (undefined when not a readable file). */
+  private readonly cache = new Map<string, { doc: YamlDoc | null; size: number | undefined }>();
   constructor(readonly dir: string) {}
 
+  /** An absolute input is returned unchanged (a playbook outside dir); a relative one joins dir. */
   abs(rel: string): string {
-    return join(this.dir, rel);
+    return isAbsolute(rel) ? rel : join(this.dir, rel);
   }
 
+  /** Relative to dir when inside it (drive-letter / case-insensitive on Windows), else the forward-slashed path. */
   rel(abs: string): string {
     const a = abs.replace(/\\/g, "/");
     const b = this.dir.replace(/\\/g, "/").replace(/\/+$/, "");
-    return a.startsWith(`${b}/`) ? a.slice(b.length + 1) : a;
+    const fold = (x: string) => (process.platform === "win32" ? x.toLowerCase() : x);
+    return fold(a).startsWith(fold(`${b}/`)) ? a.slice(b.length + 1) : a;
   }
 
-  read(abs: string): YamlDoc | null {
-    if (this.cache.has(abs)) return this.cache.get(abs)!;
+  /** Parse a YAML file of at most `maxBytes` (default 2 MiB); null when missing, unreadable or larger. */
+  read(abs: string, maxBytes = MAX_YAML_BYTES): YamlDoc | null {
+    const hit = this.cache.get(abs);
+    if (hit && (hit.size === undefined || hit.size > maxBytes)) return null;
+    if (hit?.doc) return hit.doc;
     let doc: YamlDoc | null = null;
+    let size: number | undefined;
     try {
       const st = statSync(abs);
-      if (st.isFile() && st.size <= MAX_YAML_BYTES) doc = parseYaml(readFileSync(abs, "utf8"));
+      if (st.isFile()) {
+        size = st.size;
+        if (st.size <= maxBytes) doc = parseYaml(readFileSync(abs, "utf8"));
+      }
     } catch {
       doc = null;
+      size = undefined;
     }
-    this.cache.set(abs, doc);
+    this.cache.set(abs, { doc, size });
     return doc;
   }
 }
@@ -687,6 +714,72 @@ function walkFiles(dir: string, depth: number, out: string[], base = dir): void 
       out.push(p);
     }
   }
+}
+
+/** Dirs the R1 tree walk skips: VCS metadata and dependency trees (ansible-lint excludes the first set too). */
+const TREE_SKIP_DIRS = new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  ".tox",
+  ".cache",
+  "node_modules",
+  "__pycache__",
+  ".venv",
+  "venv",
+]);
+/** Safety bound on directory entries the R1 tree walk looks at. */
+const TREE_MAX_ENTRIES = 200_000;
+
+/**
+ * Every .yml/.yaml file under `dir` at any depth (symlinked dirs followed once,
+ * by real path), for the R1 pre-scan of lint targets. `incomplete` says why the
+ * walk could not see everything (the entry bound, or a dir it could not list).
+ */
+export function yamlFilesUnder(dir: string): { files: string[]; incomplete?: string } {
+  const files: string[] = [];
+  const realSeen = new Set<string>();
+  let entriesSeen = 0;
+  let incomplete: string | undefined;
+  const walk = (d: string): void => {
+    if (incomplete) return;
+    try {
+      const real = realpathSync(d);
+      if (realSeen.has(real)) return;
+      realSeen.add(real);
+    } catch {
+      incomplete = `could not be fully listed (${d})`;
+      return;
+    }
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(d, { withFileTypes: true });
+    } catch {
+      incomplete = `could not be fully listed (${d})`;
+      return;
+    }
+    for (const e of entries.sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0))) {
+      if (++entriesSeen > TREE_MAX_ENTRIES) {
+        incomplete = `has more than ${TREE_MAX_ENTRIES} entries to pre-scan`;
+        return;
+      }
+      const p = join(d, e.name);
+      let isDirEntry = e.isDirectory();
+      let isFileEntry = e.isFile();
+      if (e.isSymbolicLink()) {
+        isDirEntry = isDir(p);
+        isFileEntry = isFile(p);
+      }
+      if (isDirEntry) {
+        if (!TREE_SKIP_DIRS.has(e.name)) walk(p);
+      } else if (isFileEntry && /\.ya?ml$/i.test(e.name)) {
+        files.push(p);
+      }
+      if (incomplete) return;
+    }
+  };
+  walk(dir);
+  return incomplete ? { files, incomplete } : { files };
 }
 
 /** Minimal INI read of ansible.cfg [defaults] (static half of project_info; no Ansible needed). */

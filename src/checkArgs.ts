@@ -151,7 +151,10 @@ function checkValue(
 
   const choices = choicesOf(spec);
   const elements = type === "list" ? (spec.elements ?? null) : null;
-  const items = elements && Array.isArray(v) ? v : [v];
+  // A list value is checked item by item whether or not the doc names
+  // `elements` (a list option with choices but no elements is common); a
+  // string goes through Ansible's comma split below.
+  const items = type === "list" && Array.isArray(v) ? v : [v];
   if (choices && (type !== "list" || Array.isArray(v) || typeof v !== "object")) {
     const list = type === "list" && typeof v === "string" ? v.split(",").map((s) => s.trim()) : items;
     for (const item of list) {
@@ -159,7 +162,9 @@ function checkValue(
       if (choices.some((c) => c === item || String(c) === String(item))) continue;
       if (typeof item === "boolean" && raw && isYaml11BoolWord(raw)) {
         out.values.push(
-          `${where}: unquoted ${raw} is the boolean ${item} in YAML 1.1, not one of ${choices.map(String).join("|")}; quote it ("${raw}")`,
+          sensitive(label, spec, item)
+            ? `${where}: an unquoted value is a boolean in YAML 1.1, not one of ${choices.map(String).join("|")}; quote it`
+            : `${where}: unquoted ${raw} is the boolean ${item} in YAML 1.1, not one of ${choices.map(String).join("|")}; quote it ("${raw}")`,
         );
       } else {
         out.values.push(`${where}: ${show(item)} is not one of ${choices.map(String).join("|")}`);
@@ -175,13 +180,22 @@ function checkValue(
     out.values.push(`${where}: expected ${type}, got ${err}${detail}`);
     return;
   }
+  // The YAML 1.1 hints quote the raw text and its converted value, so a
+  // no_log / secret-like option gets them without either.
+  const hide = sensitive(label, spec, v);
   if (type === "str" && typeof v === "boolean" && raw && isYaml11BoolWord(raw)) {
     out.values.push(
-      `${where}: unquoted ${raw} becomes the boolean ${v} in YAML 1.1 (Ansible passes the string '${v ? "True" : "False"}'); quote it ("${raw}")`,
+      hide
+        ? `${where}: an unquoted value becomes a boolean in YAML 1.1; quote it`
+        : `${where}: unquoted ${raw} becomes the boolean ${v} in YAML 1.1 (Ansible passes the string '${v ? "True" : "False"}'); quote it ("${raw}")`,
     );
   }
   if (type === "str" && typeof v === "number" && /^0[0-7]+$/.test(raw)) {
-    out.values.push(`${where}: unquoted ${raw} is the octal integer ${v} in YAML 1.1; quote it ("${raw}")`);
+    out.values.push(
+      hide
+        ? `${where}: an unquoted value is an octal integer in YAML 1.1; quote it`
+        : `${where}: unquoted ${raw} is the octal integer ${v} in YAML 1.1; quote it ("${raw}")`,
+    );
   }
 
   if (elements && Array.isArray(v)) {

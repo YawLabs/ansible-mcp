@@ -30,7 +30,14 @@ import {
 } from "./inventory.js";
 import { parseCodeclimate, renderLint } from "./lint.js";
 import { PlainAnswer, relativeTo } from "./paths.js";
-import { localPluginFiles, parseListOutput, parseStderrMessages, prescanPlaybook, prescanRefusal } from "./playbook.js";
+import {
+  localPluginFiles,
+  parseListOutput,
+  parseStderrMessages,
+  prescanLintTargets,
+  prescanPlaybook,
+  prescanRefusal,
+} from "./playbook.js";
 import {
   detectProject,
   extractTask,
@@ -414,12 +421,14 @@ export async function roleInterface(
   let specs = null;
   let source = "meta/argument_specs.yml";
   if (ctx.runner.available()) {
+    const base = roleDir
+      .replace(/[\\/]+$/, "")
+      .split(/[\\/]/)
+      .pop()!;
+    // The basename is a positional ansible-doc argument: never one that reads as an option.
+    refuseDash("role", base);
     try {
       const sideParent = await ctx.runner.toSide(dirname(roleDir));
-      const base = roleDir
-        .replace(/[\\/]+$/, "")
-        .split(/[\\/]/)
-        .pop()!;
       const r = await ctx.runSafe(p, "ansible-doc", ["--json", "-t", "role", "-r", sideParent, base]);
       if (r.code === 0) {
         specs = roleSpecsFromDocJson(r.stdout, base)?.specs ?? null;
@@ -492,11 +501,9 @@ export async function inventory(
     for (const s of sources) bases.set(isDir(s) ? s : dirname(s), "");
     bases.set(p.dir, "");
     const files = new ProjectFiles(p.dir);
-    const fb = renderVarsFilesFallback(
-      [...bases.keys()].map((b) => ({ base: b, label: files.rel(b) })),
-      (abs) => files.rel(abs),
-      red,
-    );
+    // The inventory-file vars are listed (and learnt by the redactor) BEFORE
+    // the per-file view is rendered, so a secret from the inventory file that
+    // is copied into a group_vars file under a plain key is still hidden.
     const env = { ANSIBLE_VARS_ENABLED: "none" };
     const r = await ctx.runSafe(
       p,
@@ -506,24 +513,32 @@ export async function inventory(
         env,
       },
     );
-    const out = [
-      `degraded: group_vars/host_vars merged by Ansible are unavailable because ${fb.vaulted.join(", ") || "a vars file"} ${fb.vaulted.length === 1 ? "is a whole-file vault" : "are whole-file vaults"} (ansible-mcp never supplies vault secrets); showing per-file contents instead, without precedence.`,
-    ];
+    let hv: Record<string, Record<string, unknown>> | null = null;
     if (r.code === 0) {
       try {
         const data = JSON.parse(r.stdout);
-        const hv: Record<string, Record<string, unknown>> = host ? { [host]: data } : (data?._meta?.hostvars ?? {});
-        learnAll(red, hv);
-        out.push("inventory-file vars only:");
-        for (const [h, vars] of Object.entries(hv)) {
-          if (varsMode === "names") out.push(`  ${h}: ${Object.keys(vars).sort().join(" ") || "(none)"}`);
-          else {
-            out.push(`  ${h}:`);
-            out.push(...renderHostVars(vars, red, "    "));
-          }
-        }
+        hv = host ? { [host]: data } : (data?._meta?.hostvars ?? {});
+        learnAll(red, hv!);
       } catch {
-        // fall through to the per-file view
+        hv = null; // fall through to the per-file view
+      }
+    }
+    const fb = renderVarsFilesFallback(
+      [...bases.keys()].map((b) => ({ base: b, label: files.rel(b) })),
+      (abs) => files.rel(abs),
+      red,
+    );
+    const out = [
+      `degraded: group_vars/host_vars merged by Ansible are unavailable because ${fb.vaulted.join(", ") || "a vars file"} ${fb.vaulted.length === 1 ? "is a whole-file vault" : "are whole-file vaults"} (ansible-mcp never supplies vault secrets); showing per-file contents instead, without precedence.`,
+    ];
+    if (hv) {
+      out.push("inventory-file vars only:");
+      for (const [h, vars] of Object.entries(hv)) {
+        if (varsMode === "names") out.push(`  ${h}: ${Object.keys(vars).sort().join(" ") || "(none)"}`);
+        else {
+          out.push(`  ${h}:`);
+          out.push(...renderHostVars(vars, red, "    "));
+        }
       }
     }
     out.push("group_vars / host_vars files:");
@@ -804,17 +819,19 @@ export async function lintSummary(
   if (x.profile && !PROFILES.includes(x.profile)) return `profile must be one of ${PROFILES.join(", ")}`;
   const p = await ctx.project(x.dir);
   const files = new ProjectFiles(p.dir);
-  const targets = (x.paths ?? []).map((rel) => {
-    const abs = assertRelative(ctx, p, rel, "paths");
-    return files.rel(abs);
-  });
-  // R1: lint runs syntax-check internally, so the same pre-scan applies.
-  const playbooks = targets.length
-    ? targets.filter((t) => isPlaybookRoot(files.read(join(p.dir, t))?.root ?? null))
-    : detectProject(p.dir).playbooks.map((pb) => pb.rel);
-  const hits = playbooks.flatMap((pb) => prescanPlaybook(files, pb));
+  const targetAbs = (x.paths ?? []).map((rel) => assertRelative(ctx, p, rel, "paths"));
+  // R1: lint runs syntax-check internally, so the same pre-scan applies. A
+  // directory target (or no paths: the whole project) is linted all the way
+  // down, so every playbook-like YAML file under it is pre-scanned.
+  const hits = prescanLintTargets(files, targetAbs.length ? targetAbs : [p.dir]);
   if (hits.length && !ctx.allowPlayLookups) return prescanRefusal(hits);
   ctx.runner.assertAvailable();
+  // Inside dir: relative (lint runs with cwd = dir). Outside: the Ansible-side path (WSL translation).
+  const targets: string[] = [];
+  for (const a of targetAbs) {
+    const rel = files.rel(a);
+    targets.push(rel === a.replace(/\\/g, "/") ? await ctx.runner.toSide(a) : rel);
+  }
   const args = ["--offline", "-f", "codeclimate", ...(x.profile ? ["--profile", x.profile] : []), ...targets];
   const [r, v] = await Promise.all([
     ctx.runSafe(p, "ansible-lint", args),

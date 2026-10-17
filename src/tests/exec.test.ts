@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { AnsibleContext } from "../context.js";
 import {
   AnsibleRunner,
   buildPrefixedArgv,
@@ -21,7 +22,7 @@ import {
   wslToWin,
 } from "../paths.js";
 import { RESERVED_TOOL_NAMES } from "../tools.js";
-import { type Recorded, readOut, replaySpawner } from "./helpers.js";
+import { cleanupTempDirs, type Recorded, readOut, replaySpawner, tempDir } from "./helpers.js";
 
 describe("command prefix (design.md 3.1, 3.2)", () => {
   it("parses JSON and whitespace forms and detects the WSL style", () => {
@@ -157,6 +158,154 @@ describe("command prefix (design.md 3.1, 3.2)", () => {
     });
     await expect(r.run("ansible", ["--version"])).rejects.toBeInstanceOf(PlainAnswer);
     await expect(r.run("ansible", ["--version"])).rejects.toThrow(NATIVE_WINDOWS_MESSAGE);
+  });
+});
+
+const WSL_CFG = {
+  prefix: ["wsl", "-d", "Ubuntu", "--exec"],
+  binDir: "/v/bin",
+  style: "wsl" as const,
+  passEnv: [],
+  timeoutMs: 1000,
+  platform: "win32" as const,
+};
+
+describe("Ansible-side env, cache root and temp removal (F24, design.md 6.5)", () => {
+  it("does not cache a failed or empty env listing, and asks again", async () => {
+    let n = 0;
+    const calls: Recorded[] = [];
+    const spawner = replaySpawner(
+      [
+        {
+          tool: "wsl",
+          has: ["env"],
+          when: () => ++n > 2,
+          stdout: "HOME=/home/me\n",
+        },
+        { tool: "wsl", has: ["env"], when: () => n === 2, stdout: "" },
+        { tool: "wsl", has: ["env"], code: 1, stderr: "boom" },
+      ],
+      calls,
+    );
+    const r = new AnsibleRunner(WSL_CFG, spawner);
+    await expect(r.sideEnv()).rejects.toThrow(/env exit 1\): boom/);
+    await expect(r.sideEnv()).rejects.toThrow(/environment/);
+    expect(await r.sideCacheRoot()).toBe("/home/me/.cache/ansible-mcp");
+    expect(await r.sideCacheRoot()).toBe("/home/me/.cache/ansible-mcp");
+    expect(calls.filter((c) => c.args.includes("env")).length).toBe(3);
+  });
+
+  it("refuses to fall back to /tmp when the Ansible side has no HOME", async () => {
+    const r = new AnsibleRunner(WSL_CFG, replaySpawner([{ tool: "wsl", has: ["env"], stdout: "PATH=/usr/bin\n" }]));
+    await expect(r.sideCacheRoot()).rejects.toThrow(/HOME is not set.*ANSIBLE_MCP_REMOTE_CACHE/);
+    const o = new AnsibleRunner(WSL_CFG, replaySpawner([]), "/unused", "/srv/cache");
+    expect(await o.sideCacheRoot()).toBe("/srv/cache");
+  });
+
+  it("sideRemoveTemp refuses anything but a .tmp-* dir under the guard root", async () => {
+    const calls: Recorded[] = [];
+    const r = new AnsibleRunner(WSL_CFG, replaySpawner([{ tool: "wsl", has: ["rm"] }], calls));
+    const root = "/home/me/.cache/ansible-mcp/collections";
+    for (const bad of [
+      "/home/me/.cache/other/.tmp-1",
+      "/home/me/.cache/ansible-mcp/collections-x/.tmp-1",
+      `${root}/ns.name/1.0.0`,
+      `${root}/.tmp-1/inside`,
+      `${root}/../x/.tmp-y`,
+      `${root}/ns.name/../../../.tmp-y`,
+      `${root}/./.tmp-y`,
+      root,
+    ]) {
+      await expect(r.sideRemoveTemp(bad, root), bad).rejects.toThrow(/refusing to remove/);
+    }
+    await expect(r.sideRemoveTemp(`/a/../b/.tmp-1`, "/a/../b")).rejects.toThrow(/refusing/);
+    expect(calls).toEqual([]);
+    await r.sideRemoveTemp(`${root}/ns.name/.tmp-1.0.0-abcd`, root);
+    await r.sideRemoveTemp(`${root}\\ns.name\\.tmp-stale-ef01\\`, `${root}/`);
+    expect(calls.map((c) => c.args.slice(4))).toEqual([
+      ["rm", "-r", "-f", "--", `${root}/ns.name/.tmp-1.0.0-abcd`],
+      ["rm", "-r", "-f", "--", `${root}\\ns.name\\.tmp-stale-ef01\\`],
+    ]);
+  });
+
+  it("sideRename through a prefix is mv -T -- and reports a lost race as false", async () => {
+    const calls: Recorded[] = [];
+    const r = new AnsibleRunner(
+      WSL_CFG,
+      replaySpawner(
+        [
+          { tool: "wsl", has: ["mv", "/c/.tmp-1"], code: 0 },
+          { tool: "wsl", has: ["mv"], code: 1, stderr: "mv: cannot overwrite" },
+        ],
+        calls,
+      ),
+    );
+    expect(await r.sideRename("/c/.tmp-1", "/c/1.0.0")).toBe(true);
+    expect(await r.sideRename("/c/.tmp-2", "/c/1.0.0")).toBe(false);
+    expect(calls[0]!.args.slice(4)).toEqual(["mv", "-T", "--", "/c/.tmp-1", "/c/1.0.0"]);
+  });
+});
+
+describe("ansible-doc argv and doc cache (design.md 4.1)", () => {
+  afterEach(cleanupTempDirs);
+
+  function ctxWith(docRoutes: Parameters<typeof replaySpawner>[0], calls: Recorded[]) {
+    const spawner = replaySpawner(
+      [
+        ...docRoutes,
+        { tool: "ansible", has: ["--version"], stdout: readOut("version.txt") },
+        { tool: "ansible-config", has: ["dump"], stdout: readOut("config/only-changed.json") },
+        { tool: "ansible-galaxy", has: ["collection", "list"], stdout: "{}" },
+      ],
+      calls,
+    );
+    const dir = tempDir();
+    const ctx = new AnsibleContext({
+      defaultDir: dir,
+      cacheDir: tempDir(),
+      spawner,
+      exec: { prefix: null, binDir: null, style: "native", passEnv: [], timeoutMs: 10_000, platform: "linux" },
+      env: {},
+    });
+    return ctx;
+  }
+
+  it("never puts a name starting with '-' on argv, and ends options with --", async () => {
+    const calls: Recorded[] = [];
+    const ctx = ctxWith([{ tool: "ansible-doc", has: ["--json"], stdout: "{}" }], calls);
+    const p = await ctx.project();
+    const r = await ctx.docs(p, ["--playbook-dir", "-M", "ansible.builtin.copy"]);
+    expect(r.missing.sort()).toEqual(["--playbook-dir", "-M", "ansible.builtin.copy"].sort());
+    const doc = calls.filter((c) => c.tool === "ansible-doc");
+    expect(doc.length).toBe(1);
+    expect(doc[0]!.args).toEqual(["--json", "-t", "module", "--", "ansible.builtin.copy"]);
+    // Only dash names: no spawn at all.
+    await ctx.docs(p, ["-M"], { extraArgs: ["--playbook-dir", "/x"] });
+    expect(calls.filter((c) => c.tool === "ansible-doc").length).toBe(1);
+  });
+
+  it("replays a deprecation with a cached missing name", async () => {
+    const calls: Recorded[] = [];
+    const ctx = ctxWith(
+      [
+        {
+          tool: "ansible-doc",
+          has: ["--json"],
+          stdout: "{}",
+          stderr:
+            "[DEPRECATION WARNING]: old.mod has been deprecated. Use new.mod instead.\n[WARNING]: old.mod was not found\n",
+        },
+      ],
+      calls,
+    );
+    const p = await ctx.project();
+    const first = await ctx.docs(p, ["old.mod"]);
+    const second = await ctx.docs(p, ["old.mod"]);
+    expect(calls.filter((c) => c.tool === "ansible-doc").length).toBe(1);
+    for (const r of [first, second]) {
+      expect(r.missing).toEqual(["old.mod"]);
+      expect(r.deprecations).toEqual([{ name: "old.mod", text: "Use new.mod instead." }]);
+    }
   });
 });
 

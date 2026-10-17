@@ -1,7 +1,7 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { isDir, isFile, type ProjectFiles } from "./project.js";
-import { get, isTemplated, type YNode } from "./yaml.js";
+import { isDir, isPlaybookLike, type ProjectFiles, yamlFilesUnder } from "./project.js";
+import { ALIAS_LIMIT_ERROR, get, isTemplated, type YNode } from "./yaml.js";
 
 /**
  * ansible_playbook_structure (design.md 7.7) and the lookup pre-scan (R1).
@@ -120,13 +120,23 @@ export function firstSentence(text: string): string {
   return (i > 0 ? text.slice(0, i) : text).replace(/\.$/, "");
 }
 
-const LOOKUP_RE = /lookup\s*\(|query\s*\(|\bq\s*\(|\bpipe\b/;
+/**
+ * Any mention of the lookup functions, not only a direct call: Jinja can bind
+ * them first (`{% set f = lookup %}{{ f(...) }}`, `(lookup)(...)`). `q` is
+ * matched only as a call so a bare letter (`{{ q }}`, `qa`) is not flagged.
+ */
+const LOOKUP_RE = /\b(?:lookup|query|pipe)\b|\bq\s*\(/;
+
+/** Parse cap for the pre-scan: well above ProjectFiles' 2 MiB default, so a big playbook is still read. */
+const PRESCAN_MAX_BYTES = 32 * 1024 * 1024;
 
 export interface PrescanHit {
   file: string;
   line: number;
   play: string;
   field: string;
+  /** Set when the file could not be read or fully parsed, so it cannot be shown clean. */
+  unreadable?: string;
 }
 
 /**
@@ -139,9 +149,20 @@ export function prescanPlaybook(files: ProjectFiles, rel: string): PrescanHit[] 
   const visit = (abs: string) => {
     if (seen.has(abs)) return;
     seen.add(abs);
-    const root = files.read(abs)?.root;
-    if (root?.kind !== "seq") return;
     const file = files.rel(abs);
+    // A target Ansible will read but we cannot (missing, unreadable, too big,
+    // or cut short by the alias limit) is refused, never counted clean.
+    const doc = files.read(abs, PRESCAN_MAX_BYTES);
+    if (!doc) {
+      hits.push({ file, line: 0, play: "", field: "", unreadable: "could not be read" });
+      return;
+    }
+    if (doc.errors.some((e) => e.startsWith(ALIAS_LIMIT_ERROR))) {
+      hits.push({ file, line: 0, play: "", field: "", unreadable: `could not be fully parsed (${ALIAS_LIMIT_ERROR})` });
+      return;
+    }
+    const root = doc.root;
+    if (root?.kind !== "seq") return;
     for (const play of root.items) {
       if (play.kind !== "map") continue;
       const nameNode = get(play, "name");
@@ -160,13 +181,46 @@ export function prescanPlaybook(files: ProjectFiles, rel: string): PrescanHit[] 
         check("import_playbook", imp);
         const target = imp.kind === "scalar" && typeof imp.value === "string" ? imp.value : null;
         if (target && !isTemplated(target)) {
+          // A missing import fails Ansible's parse before any play is templated.
           const p = join(dirname(abs), target);
-          if (isFile(p)) visit(p);
+          if (existsSync(p)) visit(p);
         }
       }
     }
   };
   visit(files.abs(rel));
+  return hits;
+}
+
+/**
+ * R1 for lint targets (ansible-lint lints everything under a directory): a
+ * file target, and every .yml/.yaml file below a directory target at any
+ * depth, is read and pre-scanned when its root looks like a playbook (or when
+ * it cannot be read). A walk that hits its safety bound, or a dir it cannot
+ * list, is a refusal: what was not seen is not clean. Missing paths are left
+ * to ansible-lint's own error.
+ */
+export function prescanLintTargets(files: ProjectFiles, paths: string[]): PrescanHit[] {
+  const hits: PrescanHit[] = [];
+  const seen = new Set<string>();
+  const scanFile = (abs: string) => {
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    const doc = files.read(abs, PRESCAN_MAX_BYTES);
+    if (doc && !doc.errors.some((e) => e.startsWith(ALIAS_LIMIT_ERROR)) && !isPlaybookLike(doc.root)) return;
+    hits.push(...prescanPlaybook(files, abs));
+  };
+  for (const p of paths) {
+    if (isDir(p)) {
+      const walk = yamlFilesUnder(p);
+      if (walk.incomplete) {
+        hits.push({ file: files.rel(p), line: 0, play: "", field: "", unreadable: walk.incomplete });
+      }
+      for (const abs of walk.files) scanFile(abs);
+    } else if (existsSync(p)) {
+      scanFile(p);
+    }
+  }
   return hits;
 }
 
@@ -178,9 +232,10 @@ function strings(node: YNode | undefined): { value: string; line: number }[] {
 }
 
 export function prescanRefusal(hits: PrescanHit[]): string {
-  const lines = hits.map(
-    (h) =>
-      `${h.file}:${h.line} play '${h.play}' has a lookup in '${h.field}'; Ansible would run it on this machine while parsing. Not run.`,
+  const lines = hits.map((h) =>
+    h.unreadable
+      ? `${h.file} ${h.unreadable} for the lookup pre-scan; Ansible would parse it. Not run.`
+      : `${h.file}:${h.line} play '${h.play}' has a lookup in '${h.field}'; Ansible would run it on this machine while parsing. Not run.`,
   );
   lines.push("Set ANSIBLE_MCP_ALLOW_PLAY_LOOKUPS=1 to allow.");
   return lines.join("\n");

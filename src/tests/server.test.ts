@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -303,10 +303,8 @@ describe("server", () => {
     expect(calls.filter((c) => c.tool === "ansible-playbook" || c.tool === "ansible-lint")).toEqual([]);
   });
 
-  it("ansible_upgrade_impact: downloads once into the cache, then answers from it", async () => {
-    const dir = fixtureCopy("project");
-    const cacheDir = tempDir();
-    const calls: Recorded[] = [];
+  /** Replayed ansible.posix 2.0.0 install, target docs and target syntax-check. */
+  function upgradeRoutes(cacheDir: string): Route[] {
     const tree = join(cacheDir, "collections", "ansible.posix", "2.0.0").replace(/\\/g, "/");
     const install: Route = {
       tool: "ansible-galaxy",
@@ -342,9 +340,27 @@ describe("server", () => {
       when: (_a, env) => (env.ANSIBLE_COLLECTIONS_PATH ?? "").includes("ansible.posix"),
       stdout: "\nplaybook: playbooks/site.yml\n",
     };
+    return [install, targetDocs, targetSyntax];
+  }
+
+  /** Every Ansible child except ansible-config dump / --version probes got the safety env. */
+  function expectSafetyEnv(calls: Recorded[]) {
+    const safe = calls.filter((x) => !["ansible-config", "ansible"].includes(x.tool) && !x.args.includes("--version"));
+    expect(safe.length).toBeGreaterThan(0);
+    for (const c of safe) {
+      expect(c.env.ANSIBLE_VAULT_PASSWORD_FILE, `${c.tool} ${c.args.join(" ")}`).toMatch(/[\\/]vault-null$/);
+      expect(c.env.ANSIBLE_INVENTORY_ENABLED, `${c.tool} ${c.args.join(" ")}`).toBe("host_list,yaml,ini,toml");
+      expect(c.env.ANSIBLE_VAULT_ID_MATCH, `${c.tool} ${c.args.join(" ")}`).toBeUndefined();
+    }
+  }
+
+  it("ansible_upgrade_impact: downloads once into the cache, then answers from it", async () => {
+    const dir = fixtureCopy("project");
+    const cacheDir = tempDir();
+    const calls: Recorded[] = [];
     client = await connect({
       exec: LINUX,
-      spawner: replaySpawner(routes(dir, [install, targetDocs, targetSyntax]), calls),
+      spawner: replaySpawner(routes(dir, upgradeRoutes(cacheDir)), calls),
       cacheDir,
       defaultDir: dir,
     });
@@ -354,6 +370,7 @@ describe("server", () => {
         arguments: { collection: "ansible.posix", version: "2.0.0" },
       });
       expect(res.isError, textOf(res)).toBeFalsy();
+      expect(textOf(res)).not.toMatch(SENTINELS);
       return textOf(res);
     };
     const first = await run();
@@ -379,6 +396,28 @@ describe("server", () => {
     expect(second).toMatch(/dependencies: none; cached \(cache: /);
     expect(installs()).toBe(1);
 
+    // The install, the target-path ansible-doc and the target syntax-check all
+    // ran under the safety env, like every other child.
+    expectSafetyEnv(calls);
+    expect(
+      calls.some((c) => c.tool === "ansible-doc" && (c.env.ANSIBLE_COLLECTIONS_PATH ?? "").includes("ansible.posix")),
+    ).toBe(true);
+    expect(
+      calls.some(
+        (c) => c.tool === "ansible-playbook" && (c.env.ANSIBLE_COLLECTIONS_PATH ?? "").includes("ansible.posix"),
+      ),
+    ).toBe(true);
+    // The install never forces, never reads requirements, never upgrades, and
+    // lands in a `.tmp-*` dir under the cache.
+    const inst = calls.find((c) => c.tool === "ansible-galaxy" && c.args.includes("install"))!;
+    for (const f of ["--force", "--force-with-deps", "-r", "--requirements-file", "--upgrade", "-U"]) {
+      expect(inst.args, f).not.toContain(f);
+    }
+    expect(inst.args).toContain("--no-deps");
+    const dest = inst.args[inst.args.indexOf("-p") + 1]!.replace(/\\/g, "/");
+    const base = join(cacheDir, "collections", "ansible.posix").replace(/\\/g, "/");
+    expect(dest.startsWith(`${base}/.tmp-2.0.0-`)).toBe(true);
+
     const bad = await client.callTool({
       name: "ansible_upgrade_impact",
       arguments: { collection: "Community", version: "1" },
@@ -399,6 +438,45 @@ describe("server", () => {
       arguments: { collection: "community.docker", version: "4.0.0" },
     });
     expect(textOf(none)).toMatch(/^community\.docker is not installed in any collections path/);
+  });
+
+  it("ansible_upgrade_impact: replaces a stale cache entry (no or wrong MANIFEST.json) instead of failing forever", async () => {
+    const dir = fixtureCopy("project");
+    const cacheDir = tempDir();
+    const calls: Recorded[] = [];
+    const base = join(cacheDir, "collections", "ansible.posix");
+    const target = join(base, "2.0.0");
+    const manifest = join(target, "ansible_collections", "ansible", "posix", "MANIFEST.json");
+    client = await connect({
+      exec: LINUX,
+      spawner: replaySpawner(routes(dir, upgradeRoutes(cacheDir)), calls),
+      cacheDir,
+      defaultDir: dir,
+    });
+    const run = async () => {
+      const res = await client!.callTool({
+        name: "ansible_upgrade_impact",
+        arguments: { collection: "ansible.posix", version: "2.0.0" },
+      });
+      expect(res.isError, textOf(res)).toBeFalsy();
+      return textOf(res);
+    };
+    const installs = () => calls.filter((c) => c.args.includes("install")).length;
+
+    // A leftover dir without MANIFEST.json (e.g. a crashed manual copy).
+    mkdirSync(join(target, "junk"), { recursive: true });
+    expect(await run()).toMatch(/dependencies: none; downloaded \(cache: /);
+    expect(JSON.parse(readFileSync(manifest, "utf8")).collection_info.version).toBe("2.0.0");
+    expect(readdirSync(base)).toEqual(["2.0.0"]);
+    expect(await run()).toMatch(/dependencies: none; cached \(cache: /);
+    expect(installs()).toBe(1);
+
+    // A tree whose MANIFEST.json names another version is never served as 2.0.0.
+    writeFileSync(manifest, JSON.stringify({ collection_info: { version: "1.9.9", dependencies: {} } }));
+    expect(await run()).toMatch(/dependencies: none; downloaded \(cache: /);
+    expect(JSON.parse(readFileSync(manifest, "utf8")).collection_info.version).toBe("2.0.0");
+    expect(readdirSync(base)).toEqual(["2.0.0"]);
+    expect(installs()).toBe(2);
   });
 
   it("answers in plain text on native Windows without a prefix; static tools still work", async () => {

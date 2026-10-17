@@ -4,7 +4,7 @@ MCP server answering "what is actually true in THIS Ansible checkout on THIS con
 
 Complements Red Hat's servers, never replaces them. Authority split (also in `INSTRUCTIONS` and the tool descriptions): AAP MCP owns controller state; ADT MCP owns actions (lint `--fix`, navigator, scaffolding, EE builds); this server owns installed specs, task-argument validity, role interfaces, local inventory, play structure, effective config, dependency drift and collection upgrade impact.
 
-npm only, no SEA binary; `package.json` has `"private": true` until the first publish (remove it, and add `repository.id` to server.json once the GitHub repo exists, before the first `release.sh`).
+npm only, no SEA binary; published to npm (and the MCP Registry, via server.json with its `repository.id`) from 0.1.0.
 
 ## Architecture
 

@@ -266,12 +266,38 @@ command -v npm >/dev/null  || fail "npm not installed"
 if [ "$IS_CI" != "true" ]; then
   command -v gh >/dev/null || fail "gh CLI not installed"
 fi
+# jq rewrites server.json in step 2; without it the version sync would fail
+# halfway (or, worse, read as "already in sync").
+command -v jq >/dev/null   || fail "jq not installed (needed to sync server.json)"
 
 # Branch check: in CI we are on a detached HEAD at the tag commit, which is fine.
 if [ "$IS_CI" != "true" ]; then
   CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
   if [ "$CURRENT_BRANCH" != "main" ]; then
     fail "Must be on main (currently on '$CURRENT_BRANCH')"
+  fi
+
+  # Clean tree: the workstation publish path (step 5) packs the WORKING TREE,
+  # so any uncommitted change would ship in the tarball without being in the
+  # tagged commit. The one tolerated dirt is a resume run's own step-2 output
+  # (package.json already at $VERSION, bump files not yet committed).
+  BUMP_PATHS_RE='^(package\.json|package-lock\.json|CHANGELOG\.md|server\.json)$'
+  PREFLIGHT_VERSION=$(node -p "require('./package.json').version")
+  DIRTY=$(git status --porcelain --untracked-files=normal)
+  if [ "$PREFLIGHT_VERSION" = "$VERSION" ]; then
+    DIRTY=$(printf '%s\n' "$DIRTY" | awk 'NF { print substr($0, 4) }' | grep -Ev "$BUMP_PATHS_RE" || true)
+  fi
+  if [ -n "$DIRTY" ]; then
+    git status --short
+    fail "Working tree is not clean -- commit or stash the changes above before releasing"
+  fi
+
+  # Up to date with origin/main: a release cut from a stale main would tag and
+  # publish a commit that is missing what is already on origin. Ahead is fine
+  # (a resume run's unpushed bump commit).
+  git fetch origin main || fail "git fetch origin main failed -- cannot verify main is up to date"
+  if ! git merge-base --is-ancestor origin/main HEAD; then
+    fail "Local main is behind origin/main ($(git rev-parse --short origin/main)) -- pull before releasing"
   fi
 fi
 
@@ -390,8 +416,18 @@ else
     info "Already committed -- skipping"
   fi
 
-  if git tag -l "v${VERSION}" | grep -q "v${VERSION}"; then
-    info "Tag v${VERSION} already exists -- skipping"
+  if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+    # Re-read both SHAs here, not earlier: the commit above just moved HEAD.
+    # A pre-existing tag must point at the commit being released -- npm
+    # publishes the working tree (HEAD) and `gh release create` links the tag,
+    # so a stale tag (left from an aborted run, created by hand) would put two
+    # different commits behind one version.
+    EXISTING_TAG_SHA=$(git rev-parse "v${VERSION}^{}")
+    HEAD_SHA=$(git rev-parse HEAD)
+    if [ "$EXISTING_TAG_SHA" != "$HEAD_SHA" ]; then
+      fail "Tag v${VERSION} already exists at $EXISTING_TAG_SHA but HEAD is $HEAD_SHA -- delete or move the stale tag (git tag -d v${VERSION}) before re-running"
+    fi
+    info "Tag v${VERSION} already exists at HEAD -- skipping"
   else
     # Annotated (-a) so `git push --follow-tags` below picks it up;
     # lightweight tags are ignored by --follow-tags and would silently

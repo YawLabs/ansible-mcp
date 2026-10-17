@@ -67,7 +67,21 @@ if (!oam) {
   process.exit(runTsc());
 }
 
-const res = spawnSync(oam.cmd, ["check", "."], { stdio: "inherit" });
+// Generous, but bounded: a wedged oam (or its per-project daemon) must fail
+// release.sh step 1 loudly instead of hanging it.
+const OAM_CHECK_TIMEOUT_MS = 10 * 60 * 1000;
+
+const res = spawnSync(oam.cmd, ["check", "."], { stdio: "inherit", timeout: OAM_CHECK_TIMEOUT_MS });
+
+// Timed out: fail, do not fall back. A tsc pass here would hide that oam is
+// wedged, and the check may have been partway through reporting errors.
+if (res.error && res.error.code === "ETIMEDOUT") {
+  console.error(
+    `typecheck: \`${oam.cmd} check .\` timed out after ${OAM_CHECK_TIMEOUT_MS / 60000} min -- ` +
+      "try `oam check --no-daemon .`, or ANSIBLE_MCP_RUNTIME=node to pin tsc.",
+  );
+  process.exit(1);
+}
 
 // A runtime that resolved but then failed to spawn (deleted mid-run, EACCES)
 // must not read as a clean type-check -- fall back rather than exit 0.
