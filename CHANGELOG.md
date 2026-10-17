@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `ansible_check_task_args`: the dict form `action: {module: "command ..."}`
+  splits the module string as Ansible does -- the first word is the module,
+  the rest is `k=v` (check_raw for the free-form command modules), and those
+  args win over the dict's other keys. Before, the whole string was taken as
+  the module name and its args were dropped.
+
 ## [0.1.1] -- 2026-10-16
 
 ### Security
