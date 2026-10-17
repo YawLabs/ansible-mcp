@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] -- 2026-10-16
+
 ### Security
 - R1 lookup pre-scan: YAML aliases (values and keys) are resolved, with an
   expansion limit; any `lookup`/`query`/`pipe` mention and a bare `q` inside
