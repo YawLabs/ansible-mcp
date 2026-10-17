@@ -567,8 +567,9 @@ Walk the detected playbooks (section 7.1), every local role they reference (role
   free-form modules the non-k=v remainder is `_raw_params`), merged with `args:`; the action's own args win over
   `args:`, as in Ansible's ModArgsParser. For `command`, `shell`, `raw`, `script`, `win_command` and `win_shell`
   (`check_raw`), only `creates`, `removes`, `chdir`, `executable`, `warn`, `stdin`, `stdin_add_newline` and
-  `strip_empty_ends` become options; any other `k=v` (`env FOO=bar make`) stays in `_raw_params`. The old dict form
-  `action: {module: "command ..."}` does not get `check_raw` yet. Each arg keeps its line number.
+  `strip_empty_ends` become options; any other `k=v` (`env FOO=bar make`) stays in `_raw_params`. The dict form
+  `action: {module: "command ..."}` is split the same way, and the module string's args win over the other keys.
+  Each arg keeps its line number.
 - **Resolution to FQCN:** names containing two dots are used as given. Short names (and every name, to follow
   redirects) are resolved in one batched `ansible-doc --json <names...>` call. `doc.plugin_name` gives the FQCN
   (verified: `ufw` -> `community.general.ufw`, `mount` -> `ansible.posix.mount`). A play or role `collections:`

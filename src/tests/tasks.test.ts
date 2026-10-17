@@ -61,6 +61,16 @@ describe("parse_kv check_raw for free-form command modules (P3)", () => {
     expect(argMap(task("local_action: command env A=1 true\n"))).toEqual({ _raw_params: "env A=1 true" });
   });
 
+  it("applies to the dict form's module string, whose args win over the other keys", () => {
+    const t = task("action:\n  module: command env FOO=bar make chdir=/src\n  chdir: /other\n  creates: /x\n");
+    expect(t.action).toBe("command");
+    expect(argMap(t)).toEqual({ chdir: "/src", creates: "/x", _raw_params: "env FOO=bar make" });
+    const plain = task("local_action:\n  module: copy src=a\n  dest: b\n");
+    expect(plain.action).toBe("copy");
+    expect(argMap(plain)).toEqual({ dest: "b", src: "a" });
+    expect(task("action:\n  module: ping\n").action).toBe("ping");
+  });
+
   it("leaves other free-form modules and plain modules on ordinary parse_kv", () => {
     expect(argMap(task("set_fact: a=b c=d\n"))).toEqual({ a: "b", c: "d" });
     expect(argMap(task("debug: msg=hi\n"))).toEqual({ msg: "hi" });
