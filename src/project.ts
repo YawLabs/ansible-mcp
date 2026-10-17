@@ -325,10 +325,19 @@ export function extractTask(
       t.form = "kv";
       t.args = Object.entries(kv).map(([k, val]) => ({ name: k, line: v.line, value: val }));
     } else if (v.kind === "map") {
-      const mod = scalarString(get(v, "module"));
+      // `module:` may carry free-form args (`module: command echo a=b`).
+      // Ansible splits it, parses the rest with check_raw for the free-form
+      // modules, and lets those args win over the other keys.
+      const modNode = get(v, "module");
+      const [mod, ...rest] = splitArgs(scalarString(modNode) ?? "");
       if (mod) t.action = mod;
       t.form = "dict";
       t.args = v.entries.filter((e) => e.key !== "module").map((e) => entryArg(e.key, e.keyLine, e.value));
+      if (mod && rest.length > 0) {
+        const kv = parseKv(rest.join(" "), isCheckRawAction(mod));
+        t.args = t.args.filter((a) => !(a.name in kv));
+        for (const [k, val] of Object.entries(kv)) t.args.push({ name: k, line: modNode!.line, value: val });
+      }
     }
     if (actions.length > 0) t.conflicting = [actionKw.key, ...actions.map((a) => a.key)];
   } else if (actions.length > 0) {
