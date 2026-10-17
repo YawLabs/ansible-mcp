@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { isDir, isPlaybookLike, type ProjectFiles, yamlFilesUnder } from "./project.js";
+import { importPlaybookEntry, isDir, isPlaybookLike, type ProjectFiles, yamlFilesUnder } from "./project.js";
 import { ALIAS_LIMIT_ERROR, get, isTemplated, type YNode } from "./yaml.js";
 
 /**
@@ -122,10 +122,20 @@ export function firstSentence(text: string): string {
 
 /**
  * Any mention of the lookup functions, not only a direct call: Jinja can bind
- * them first (`{% set f = lookup %}{{ f(...) }}`, `(lookup)(...)`). `q` is
- * matched only as a call so a bare letter (`{{ q }}`, `qa`) is not flagged.
+ * them first (`{% set f = lookup %}{{ f(...) }}`, `(lookup)(...)`). The short
+ * name `q` is flagged as a whole word anywhere from the first `{{` / `{%` on
+ * (`{% set f = q %}`, `(q)(...)`), so a plain-text letter q is not; the rest
+ * of the string is searched rather than each block, since a `}}` inside a
+ * Jinja string literal would end a block match early.
  */
-const LOOKUP_RE = /\b(?:lookup|query|pipe)\b|\bq\s*\(/;
+const LOOKUP_RE = /\b(?:lookup|query|pipe)\b/;
+const Q_RE = /\bq\b/;
+
+export function mentionsLookup(s: string): boolean {
+  if (LOOKUP_RE.test(s)) return true;
+  const open = s.search(/\{[{%]/);
+  return open >= 0 && Q_RE.test(s.slice(open));
+}
 
 /** Parse cap for the pre-scan: well above ProjectFiles' 2 MiB default, so a big playbook is still read. */
 const PRESCAN_MAX_BYTES = 32 * 1024 * 1024;
@@ -170,13 +180,13 @@ export function prescanPlaybook(files: ProjectFiles, rel: string): PrescanHit[] 
         nameNode?.kind === "scalar" && typeof nameNode.value === "string" ? nameNode.value : `#${play.line}`;
       const check = (field: string, node: YNode | undefined) => {
         for (const s of strings(node)) {
-          if (LOOKUP_RE.test(s.value)) hits.push({ file, line: s.line, play: label, field });
+          if (mentionsLookup(s.value)) hits.push({ file, line: s.line, play: label, field });
         }
       };
       check("name", nameNode);
       check("hosts", get(play, "hosts"));
       check("vars_files", get(play, "vars_files"));
-      const imp = get(play, "import_playbook") ?? get(play, "ansible.builtin.import_playbook");
+      const imp = importPlaybookEntry(play);
       if (imp) {
         check("import_playbook", imp);
         const target = imp.kind === "scalar" && typeof imp.value === "string" ? imp.value : null;
@@ -200,7 +210,7 @@ export function prescanPlaybook(files: ProjectFiles, rel: string): PrescanHit[] 
  * list, is a refusal: what was not seen is not clean. Missing paths are left
  * to ansible-lint's own error.
  */
-export function prescanLintTargets(files: ProjectFiles, paths: string[]): PrescanHit[] {
+export function prescanLintTargets(files: ProjectFiles, paths: string[], maxEntries?: number): PrescanHit[] {
   const hits: PrescanHit[] = [];
   const seen = new Set<string>();
   const scanFile = (abs: string) => {
@@ -212,7 +222,7 @@ export function prescanLintTargets(files: ProjectFiles, paths: string[]): Presca
   };
   for (const p of paths) {
     if (isDir(p)) {
-      const walk = yamlFilesUnder(p);
+      const walk = yamlFilesUnder(p, maxEntries);
       if (walk.incomplete) {
         hits.push({ file: files.rel(p), line: 0, play: "", field: "", unreadable: walk.incomplete });
       }

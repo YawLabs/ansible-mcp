@@ -19,7 +19,7 @@ import type { AnsibleContext, Project } from "./context.js";
 import { PlainAnswer } from "./paths.js";
 import { firstSentence, parseStderrMessages, prescanPlaybook } from "./playbook.js";
 import { detectProject, ProjectFiles, type WalkTask, walkPlaybooks } from "./project.js";
-import { hasSecretShape, isSecretKey, redactText } from "./redact.js";
+import { hasSecretShape, isSecretKey, NO_LOG, redactStandalone, redactText } from "./redact.js";
 import { isTemplated, parseYaml, toJS } from "./yaml.js";
 
 /**
@@ -99,7 +99,25 @@ export interface ModuleDiffInput {
   redirectResolved?: { fqcn: string; version?: string } | null;
 }
 
-const fmtDefault = (v: unknown) => (typeof v === "string" ? `'${v}'` : JSON.stringify(v ?? null));
+/**
+ * A documented default in a BEHAVIOR CHANGE line, redacted like
+ * ansible_module_doc / ansible_role_interface print defaults (design.md 5):
+ * `(no_log)` when either side's spec is `no_log`, else layers 1, 3 and 4 under
+ * the option name. A plain string keeps its single-quoted form.
+ */
+function fmtDefault(v: unknown, name: string, noLog: boolean): string {
+  if (noLog) return NO_LOG;
+  const r = redactStandalone(v ?? null, name);
+  if (r.startsWith('"')) {
+    try {
+      const s: unknown = JSON.parse(r);
+      if (typeof s === "string") return `'${s}'`;
+    } catch {
+      // not a bare JSON string: print as rendered
+    }
+  }
+  return r;
+}
 const fmtChoiceValue = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
 
 /**
@@ -196,7 +214,12 @@ function diffOptions(
       const dI = specI.default ?? null;
       const dT = specT.default ?? null;
       if (JSON.stringify(dI) !== JSON.stringify(dT)) {
-        push("BEHAVIOR CHANGE", `${prefix}${name} not set; default ${fmtDefault(dI)} -> ${fmtDefault(dT)}`, 7);
+        const noLog = specI.no_log === true || specT.no_log === true;
+        push(
+          "BEHAVIOR CHANGE",
+          `${prefix}${name} not set; default ${fmtDefault(dI, name, noLog)} -> ${fmtDefault(dT, name, noLog)}`,
+          7,
+        );
       }
     }
   }
@@ -504,11 +527,16 @@ export async function ensureTarget(
     // Target exists: another process won the race, or a stale tree (no
     // MANIFEST.json, or one naming another version) sits there and would make
     // every call re-download. Keep a correct winner; move anything else aside
-    // as a `.tmp-stale-*` sibling (removed below, or by the startup sweep).
+    // as a `.tmp-stale-*` sibling, removed in the `finally` below. Only if that
+    // removal itself fails does the sibling stay: the startup sweep clears it
+    // from the native cache after an hour, but nothing sweeps the Ansible-side
+    // cache in prefix mode (ANSIBLE_MCP_REMOTE_CACHE), where it stays until
+    // removed by hand. If the move aside fails, the target is left untouched.
     const winner = await readManifest(ctx, target, collection);
     if (winner?.collection_info?.version === version) return { dir: target, downloaded: true, manifest: winner };
-    stale = ctx.runner.sideJoin(base, `.tmp-stale-${randomBytes(4).toString("hex")}`);
-    if (!(await ctx.runner.sideRename(target, stale)) || !(await ctx.runner.sideRename(tmp, target))) {
+    const aside = ctx.runner.sideJoin(base, `.tmp-stale-${randomBytes(4).toString("hex")}`);
+    if (await ctx.runner.sideRename(target, aside)) stale = aside;
+    if (!stale || !(await ctx.runner.sideRename(tmp, target))) {
       throw new Error(
         `could not move the downloaded ${collection} ${version} into the cache at ${target} (it holds ${winner ? `a tree that says ${winner.collection_info?.version ?? "no version"}` : "no MANIFEST.json"}); remove that directory and retry.`,
       );

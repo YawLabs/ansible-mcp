@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, normalize } from "node:path";
 import { BAD_TYPE_MESSAGE, collectionsPathOf, isPluginType, type PluginDoc, renderModuleDoc } from "./ansibleDoc.js";
 import { checkTask, docNamesFor, renderChecks, resolveTaskDoc } from "./checkArgs.js";
 import {
@@ -64,6 +64,8 @@ function refuseDash(param: string, v: string | undefined): void {
 function assertRelative(ctx: AnsibleContext, p: Project, rel: string, what: string): string {
   ctx.runner.assertLocal(rel);
   refuseDash(what, rel);
+  // Normalization turns `./--fix` or `a/../--fix` into `--fix`: check that form too.
+  refuseDash(what, normalize(rel.trim()));
   const abs = /^[A-Za-z]:[\\/]|^\//.test(rel) ? rel : join(p.dir, rel);
   ctx.runner.assertLocal(abs);
   return abs;
@@ -830,9 +832,19 @@ export async function lintSummary(
   const targets: string[] = [];
   for (const a of targetAbs) {
     const rel = files.rel(a);
-    targets.push(rel === a.replace(/\\/g, "/") ? await ctx.runner.toSide(a) : rel);
+    const target = rel === a.replace(/\\/g, "/") ? await ctx.runner.toSide(a) : rel;
+    // A positional that reads as an option (`--fix` writes files) is never passed.
+    refuseDash("paths", target);
+    targets.push(target);
   }
-  const args = ["--offline", "-f", "codeclimate", ...(x.profile ? ["--profile", x.profile] : []), ...targets];
+  // `--` ends ansible-lint's (argparse) options, so no target can be read as one.
+  const args = [
+    "--offline",
+    "-f",
+    "codeclimate",
+    ...(x.profile ? ["--profile", x.profile] : []),
+    ...(targets.length ? ["--", ...targets] : []),
+  ];
   const [r, v] = await Promise.all([
     ctx.runSafe(p, "ansible-lint", args),
     ctx
