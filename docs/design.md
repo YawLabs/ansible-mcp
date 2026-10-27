@@ -2,10 +2,10 @@
 
 Status: implemented in v0.1 (2026-10-15), verified against real Ansible output. Where the code deliberately
 differs from this text: the task keyword list is pinned in `src/project.ts` (checked against `doc/keywords.json` by a
-unit test) instead of being fetched per core version; `ansible-config dump` and the `--version` probes also get
+unit test) instead of being fetched per core version; `ansible-config dump` also gets
 `ANSIBLE_LOCAL_TEMP` pointing at the server's cache (resolving the config creates a dir under local_tmp, and 4.1
 promises nothing is written to `~/.ansible`), and that injected `DEFAULT_LOCAL_TMP` row is hidden in
-`ansible_config`; `ansible_playbook_structure` prints each task's tags as Ansible lists them.
+`ansible_config`; the `--version` probes run under the full safety env (4.2) like every other child; `ansible_playbook_structure` prints each task's tags as Ansible lists them.
 Scope: a read-only MCP server that answers "what is true in THIS Ansible checkout on THIS control node". Eleven
 tools, all prefixed `ansible_`. npm only (no SEA binary), `"private": true` until the first publish.
 House template: terraform-cwd-mcp (structure, Biome, vitest, scripts/lint.mjs, check:compliance grade A, release.sh,
@@ -427,6 +427,14 @@ default to `$HOME/.cache/ansible-mcp/` (never `/tmp`, F24). Override with `ANSIB
 | `ANSIBLE_DEPRECATION_WARNINGS` | left alone | The warnings are useful (F16). |
 | unset: `ANSIBLE_VAULT_ID_MATCH`, `ANSIBLE_CONFIG` only in the DrvFs case (it gets set, section 3.3) | | |
 
+The `--version` probes (`ansible`, `ansible-lint --offline`, and the per-binary probes of `ansible_project_info`)
+get the safety env too, although none of them performs a vault operation: verified with ansible-core 2.21.5 /
+ansible-lint 26.10.1 run in the hostile project with no safety env at all (no marker from any `--version`, while
+`ansible-inventory --list` touches `vault-password-script` and `inventory-script`). They read the effective config
+like everything else (an ansible.cfg in their cwd, or a forwarded `ANSIBLE_CONFIG`), so the contract stays "every
+child but `ansible-config dump`", and the integration test forces the hostile ansible.cfg on every child via a
+forwarded `ANSIBLE_CONFIG`, checks each probe's argv carries it and the vault override, and expects no marker.
+
 `ansible-config dump` runs with only the color variables (verified to execute nothing, F11), so it reports the
 user's real vault/inventory settings instead of our overrides. Every other tool, whenever the user's effective config
 had a value we replaced, adds one footer line: `safety: vault_password_file from ansible.cfg ignored (ansible-mcp
@@ -611,6 +619,7 @@ Only usages that resolve into `collection` count.
 |---|---|
 | `Could not satisfy the following requirements: * <spec>` | `<ns.name> <version> was not found on the configured Galaxy servers (the version or the collection does not exist, or the server needs credentials). Nothing in <dir> was changed.` |
 | `Unknown error when attempting to call Galaxy at '<url>': <urlopen error ...>` | `could not reach <host> to download <ns.name> <version> (offline or proxy). Cached targets: <list or none>. Nothing in <dir> was changed.` |
+| `Failed to download collection tar from '<server>': <urlopen error ...>` (API reached, tarball download broke; seen as a connection reset) | `could not reach Galaxy server '<server>' to download <ns.name> <version> (download failed: <reason>). Cached targets: <list or none>. Nothing in <dir> was changed.` |
 | anything else, nonzero | `ansible-galaxy collection install failed (exit N):` + stderr (capped at 2 KiB, layer-4 redacted) |
 
 ### 6.4 Docs and routing for both sides
@@ -876,7 +885,15 @@ custom tags, and `keepSourceTokens`/ranges for line numbers. Duplicate keys are 
    * `elements` are checked inside lists
 6. Suboptions: recursed for `dict` and `list` + `elements: dict`.
 7. `mode` given as a YAML int: `mode 0755 is the octal integer 493 in YAML 1.1; quote it ("0755")`. This is the
-   classic bug, and only applies to options named `mode` of type `raw`/`str`.
+   classic bug, and only applies to options named `mode` of type `raw`/`str`. A string mode (quoted, or any
+   key=value one) is read by AnsibleModule as `int(mode, 8)`, then as symbolic: `755`, `0755`, `0o755` and
+   `u=rwx,go=rx` are all 0755; a string that is neither (`493`, `0x1ed`) fails the task with "mode must be in octal
+   or symbolic form" and is reported (`mode '493' is neither octal nor symbolic ...`).
+9. Key=value form (`file: path=/x mode=755`, `action: file ...`): parse_kv yields strings, so the YAML 1.1 hints do
+   not apply there (verified against ansible-core 2.21.5): `mode=755` is 0755, not decimal 755 (no hint);
+   `state=off` is the string `off` (a plain choice error, no boolean hint); `backup=off` converts to a bool like any
+   bool string; `content=yes` stays the string `yes`. Only the string-mode check (7) and the ordinary choice/type
+   checks run on kv values.
 8. Deprecated options or aliases, when the docs carry them.
 
 Always printed when relevant: `not checked: cross-option rules (mutually_exclusive, required_if, ...) and
@@ -1163,7 +1180,13 @@ summary: 1 ok, 1 violation, 2 missing
 Shadowing (from `galaxy/collection-list-shadowed.json` with real search order): `ansible.posix: 2.0.0 at <target>
 (effective, first in COLLECTIONS_PATHS), also 1.5.4 at <user>`. Extras (installed, not required) are counted, or
 listed with `include_extras`. The site-packages `ansible` bundle counts as one line, `N collections from the ansible
-package`.
+package` (a `site-packages` or Debian `dist-packages` dir holding `ansible_collections`, either separator).
+
+Path matching is separator-agnostic (`collectionPathKey`): `\` and `/` are equal, repeated/trailing separators and
+a trailing `ansible_collections` segment are dropped (Ansible accepts a COLLECTIONS_PATHS entry with or without it),
+`\\wsl.localhost\<distro>\x` / `\\wsl$\<distro>\x` is its Linux path `/x`, and a drive path `C:\x` matches its
+WSL translation `<mount root>c/x` (the root learned from `wslpath`, `/mnt/` until then) case-insensitively. Linux
+paths stay case-sensitive.
 
 ### 7.10 ansible_lint_summary
 

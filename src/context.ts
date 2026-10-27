@@ -129,15 +129,26 @@ export class AnsibleContext {
 
   /** The env + unset for a "safe" Ansible child in this project. */
   async safety(p: Project, extra: Record<string, string> = {}): Promise<Pick<RunOptions, "env" | "unset" | "cwd">> {
+    const s = await this.probeEnv();
+    return { cwd: p.dir, env: { ...s.env, ...p.env, ...extra }, unset: s.unset };
+  }
+
+  /**
+   * The safety env without a project, for the `--version` probes (`ansible`,
+   * `ansible-lint`, and the per-binary probes in ansible_project_info). Only
+   * `ansible-config dump` runs without it: a probe reads the effective config
+   * too (an `ANSIBLE_CONFIG` the user forwards, or an ansible.cfg in the cwd),
+   * so a configured vault_password_file script must be replaced there as well.
+   */
+  async probeEnv(): Promise<{ env: Record<string, string>; unset: string[] }> {
     const cacheRoot = await this.runner.sideCacheRoot();
     const vaultFile = await this.runner.vaultNullFile();
-    const s = safetyEnv({
+    return safetyEnv({
       vaultFile,
       cacheRoot,
       allowDynamicInventory: this.allowDynamicInventory,
       join: (a, b) => this.runner.sideJoin(a, b),
     });
-    return { cwd: p.dir, env: { ...s.env, ...p.env, ...extra }, unset: s.unset };
   }
 
   /** Run an Ansible tool in the project with the safety environment. */
@@ -182,10 +193,9 @@ export class AnsibleContext {
     }
   }
 
-  /** `ansible --version`, once per process. */
   /**
-   * Env for the commands that run WITHOUT the safety env (`ansible-config dump`,
-   * `--version` probes): colours off, and local_tmp in the server's cache,
+   * Env for the one command that runs WITHOUT the safety env (`ansible-config
+   * dump`): colours off, and local_tmp in the server's cache,
    * because resolving the config creates a dir under local_tmp (F15) and the
    * server never writes into ~/.ansible. Nothing else, so the dump still reports
    * the user's vault and inventory settings.
@@ -199,10 +209,11 @@ export class AnsibleContext {
     return this.runner.sideJoin(await this.runner.sideCacheRoot(), "local-tmp");
   }
 
+  /** `ansible --version`, once per process, under the safety env. */
   version(): Promise<VersionInfo> {
     if (!this.versionCache) {
-      const pending = this.quietEnv()
-        .then((env) => this.runner.run("ansible", ["--version"], { env }))
+      const pending = this.probeEnv()
+        .then((s) => this.runner.run("ansible", ["--version"], s))
         .then((r) => {
           if (r.code !== 0)
             throw new Error(`ansible --version failed (exit ${r.code}): ${r.stderr.trim().slice(0, 500)}`);

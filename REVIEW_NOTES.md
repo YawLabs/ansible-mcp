@@ -67,16 +67,26 @@ regression test.
 - **`package.json` `"private": true` (med at publish time).** RESOLVED for
   0.1.0: the flag was removed and 0.1.0 is published on npm.
 - **`ansible --version` / `ansible-lint --version` probes run without
-  `safetyEnv` (low, contract deviation).** Only `ansible-config dump` is exempt
+  `safetyEnv` (low, contract deviation).** RESOLVED (Unreleased): the probes
+  use `ctx.probeEnv()` (the safety env without a project); the integration
+  test forces the hostile ansible.cfg on every child and finds no marker.
+  Original note: Only `ansible-config dump` is exempt
   by the contract, but the version probes use `quietEnv`. In ansible-core a
   `--version` run performs no vault operation, so a configured vault-password
   script is not invoked; I could not exercise a WSL ansible here to prove it, so
   this stays a documented deviation rather than a behavior change.
 - **`ansible_check_task_args` key=value (`parse_kv`) form carries no YAML node
-  (low).** YAML-1.1 hints (unquoted `off`, octal `0755`) and the mode check are
+  (low).** RESOLVED (Unreleased): real Ansible shows kv values are plain
+  strings (`mode=755` is 0755, `state=off` the string), so no YAML 1.1 hint
+  applies; the equivalent check is the new string-mode check (octal or
+  symbolic, else reported), which also covers quoted dict-form modes.
+  Original note: YAML-1.1 hints (unquoted `off`, octal `0755`) and the mode check are
   skipped for kv-form tasks because `parseKv` returns plain strings with no node.
   Threading the node through the kv parser is a larger change than this pass.
-- **`collections.ts` path-separator assumption (unverified).** The shadowing
+- **`collections.ts` path-separator assumption (unverified).** RESOLVED
+  (Unreleased): `collectionPathKey()` / `isSitePackages()` are
+  separator-agnostic (backslashes, UNC, drive vs WSL mount, trailing
+  `ansible_collections`, dist-packages), with tests. Original note: The shadowing
   rank and the site-packages check use `/`-separated patterns; if
   `ansible-galaxy collection list` ever emits native Windows separators the
   classification would be wrong. The native/prefixed split suggests it never

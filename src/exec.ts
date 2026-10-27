@@ -319,6 +319,11 @@ export class AnsibleRunner {
     return this.mountRoot;
   }
 
+  /** The mount root learned so far (`/mnt/` until `getMountRoot()` has run). */
+  knownMountRoot(): string {
+    return this.mountRoot ?? "/mnt/";
+  }
+
   /** Server-side path -> Ansible-side path. */
   async toSide(p: string): Promise<string> {
     if (this.cfg.style !== "wsl") return p;

@@ -102,6 +102,24 @@ export function typeError(type: string, v: unknown): string | null {
   }
 }
 
+/**
+ * Would AnsibleModule accept this string `mode`? It tries `int(mode, 8)`
+ * first (so `755`, `0755` and `0o755` all mean 0755), then its symbolic
+ * parser (`u=rwx,go=rx`, `+x`, `a-w`), and otherwise fails the task with
+ * "mode must be in octal or symbolic form" (checked against ansible-core
+ * 2.21.5: `mode=493` and `mode=0x1ed` both fail). This is the only mode trap in
+ * key=value form, where every value is a string.
+ */
+export function isValidModeString(mode: string): boolean {
+  if (/^\s*[-+]?(0o)?[0-7](_?[0-7])*\s*$/i.test(mode)) return true;
+  return mode.split(",").every((clause) => {
+    const parts = clause.split(/[-+=]/);
+    let users = parts.shift() ?? "";
+    if (users === "a" || users === "") users = "ugo";
+    return /^[ugo]+$/.test(users) && parts.every((perms) => /^[rwxXstugo]*$/.test(perms));
+  });
+}
+
 interface CheckOut {
   unknown: string[];
   values: string[];
@@ -137,8 +155,17 @@ function checkValue(
   const where = `${label} (line ${line})`;
   const raw = node?.kind === "scalar" ? node.raw.trim() : "";
 
+  const isMode = label.split(".").pop() === "mode" && (type === "raw" || type === "str");
+  // mode as a string (always the case in key=value form): Ansible reads it as
+  // octal, so `mode=755` is fine and only a non-octal, non-symbolic one fails.
+  if (isMode && typeof v === "string" && !isValidModeString(v)) {
+    out.values.push(
+      `${where}: mode '${v}' is neither octal nor symbolic; Ansible reads a string mode as octal digits or u=rwx,go=rx and fails the task ("mode must be in octal or symbolic form")`,
+    );
+    return;
+  }
   // mode as a YAML int: the classic octal bug.
-  if (label.split(".").pop() === "mode" && typeof v === "number" && (type === "raw" || type === "str")) {
+  if (isMode && typeof v === "number") {
     if (/^0[0-7]+$/.test(raw)) {
       out.values.push(`mode ${raw} (line ${line}) is the octal integer ${v} in YAML 1.1; quote it ("${raw}")`);
     } else {

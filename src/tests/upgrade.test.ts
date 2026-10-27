@@ -370,6 +370,18 @@ describe("ansible_upgrade_impact rules on the real 9.5.2 -> 12.0.0 and 1.5.4 -> 
     expect(mapGalaxyError(readOut("galaxy/install-offline.stderr"), 1, "ansible.posix", "1.6.2", "/p", ["2.0.0"])).toBe(
       "could not reach galaxy.ansible.com to download ansible.posix 1.6.2 (offline or proxy). Cached targets: 2.0.0. Nothing in /p was changed.",
     );
+    // Real ansible-core 2.21.5 stderr when the tarball download is reset mid-way (integration run, 2026-10-17).
+    const reset = [
+      "Starting galaxy collection install process",
+      "Process install dependency map",
+      "Starting collection install process",
+      "[ERROR]: Failed to download collection tar from 'default': <urlopen error [Errno 104] Connection reset by peer>",
+      "",
+      "Failed to download collection tar from 'default': <urlopen error [Errno 104] Connection reset by peer>",
+    ].join("\n");
+    expect(mapGalaxyError(reset, 1, "ansible.posix", "2.0.0", "/p", [])).toBe(
+      "could not reach Galaxy server 'default' to download ansible.posix 2.0.0 (download failed: Connection reset by peer). Cached targets: none. Nothing in /p was changed.",
+    );
   });
 
   it("reports requirements constraints both ways", () => {

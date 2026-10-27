@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkTask, docNamesFor, renderChecks, typeError } from "../checkArgs.js";
+import { checkTask, docNamesFor, isValidModeString, renderChecks, typeError } from "../checkArgs.js";
 import { extractTask, ProjectFiles, parseKv, splitArgs, TASK_KEYWORDS, tasksOf } from "../project.js";
 import { parseYaml } from "../yaml.js";
 import { docResult, PROJECT, readOutJson } from "./helpers.js";
@@ -51,6 +51,59 @@ describe("checks beyond the fixture file", () => {
     expect(c!.problems).toEqual(['mode 0755 (line 3) is the octal integer 493 in YAML 1.1; quote it ("0755")']);
     const [d] = check('ansible.builtin.copy:\n  dest: /x\n  content: "y"\n  mode: "0644"\n  follow: maybe\n');
     expect(d!.problems).toEqual(["follow (line 5): expected bool, got a string that is not a boolean ('maybe')"]);
+  });
+
+  it("key=value form: strings, so no YAML 1.1 hints; mode is read as octal and only a non-octal one fails", () => {
+    // Real ansible-core 2.21.5: mode=755, mode=0755, mode=0o755 and mode=u=rwx,go=rx all give 0755;
+    // mode=493 and mode=0x1ed fail ("mode must be in octal or symbolic form"); state=off fails the choice.
+    const ok = check(
+      [
+        "- ansible.builtin.file: path=/a state=touch mode=755",
+        "- ansible.builtin.file: path=/b state=touch mode=0755",
+        "- ansible.builtin.file: path=/c state=touch mode=0o755",
+        "- ansible.builtin.file: path=/d state=touch mode=u=rwx,go=rx",
+        "- ansible.builtin.copy: dest=/g content=yes backup=off force=yes",
+        "- action: ansible.builtin.file path=/h state=touch mode=0644",
+      ].join("\n"),
+    );
+    expect(ok.map((c) => c.problems)).toEqual([[], [], [], [], [], []]);
+    expect(ok[0]!.okLine).toBe(":1 ansible.builtin.file (key=value form): ok");
+    const bad = check(
+      [
+        "- ansible.builtin.file: path=/e state=touch mode=493",
+        "- ansible.builtin.file: path=/i state=touch mode=0x1ed",
+        "- ansible.builtin.file: path=/f state=off",
+        "- action: ansible.builtin.file path=/j state=touch mode=8",
+      ].join("\n"),
+    );
+    expect(bad.map((c) => c.problems)).toEqual([
+      [
+        `mode (line 1): mode '493' is neither octal nor symbolic; Ansible reads a string mode as octal digits or u=rwx,go=rx and fails the task ("mode must be in octal or symbolic form")`,
+      ],
+      [
+        `mode (line 2): mode '0x1ed' is neither octal nor symbolic; Ansible reads a string mode as octal digits or u=rwx,go=rx and fails the task ("mode must be in octal or symbolic form")`,
+      ],
+      ["state (line 3): 'off' is not one of absent|directory|file|hard|link|touch"],
+      [
+        `mode (line 4): mode '8' is neither octal nor symbolic; Ansible reads a string mode as octal digits or u=rwx,go=rx and fails the task ("mode must be in octal or symbolic form")`,
+      ],
+    ]);
+  });
+
+  it("checks a quoted (string) mode in dict form the same way", () => {
+    const [c] = check('ansible.builtin.file:\n  path: /x\n  state: touch\n  mode: "493"\n');
+    expect(c!.problems).toEqual([
+      `mode (line 4): mode '493' is neither octal nor symbolic; Ansible reads a string mode as octal digits or u=rwx,go=rx and fails the task ("mode must be in octal or symbolic form")`,
+    ]);
+    const [d] = check('ansible.builtin.file:\n  path: /x\n  state: touch\n  mode: "{{ m }}"\n');
+    expect(d!.problems).toEqual([]);
+  });
+
+  it("isValidModeString mirrors AnsibleModule's octal-then-symbolic parse", () => {
+    for (const m of ["755", "0755", "0o755", "0O644", " 644 ", "7_5_5", "u=rwx,go=rx", "+x", "a-w", "ug+rw,o=", "u"])
+      expect(isValidModeString(m), m).toBe(true);
+    for (const m of ["493", "0x1ed", "8", "rwxr-xr-x", "z+x", "u=rwq", "ua+x"])
+      expect(isValidModeString(m), m).toBe(false);
   });
 
   it("treats aliases as satisfying required options, and reports conflicting actions", () => {

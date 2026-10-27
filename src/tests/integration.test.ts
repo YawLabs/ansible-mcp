@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { AnsibleRunner, type ExecConfig, readExecConfig, TimeoutError } from "../exec.js";
+import { AnsibleRunner, type ExecConfig, nodeSpawner, readExecConfig, type Spawner, TimeoutError } from "../exec.js";
 import { winToWsl } from "../paths.js";
 import { createAnsibleMcpServer } from "../server.js";
 import { cleanupTempDirs, FIXTURES, tempDir } from "./helpers.js";
@@ -112,8 +112,9 @@ function toSideFixture(p: string): string {
  */
 const ENV_KEYS = ["ANSIBLE_COLLECTIONS_PATH", "XDG_CACHE_HOME", "ANSIBLE_MCP_MARK_DIR"];
 
-async function connect(extra: { allowPlayLookups?: boolean; passEnv?: string[] } = {}) {
+async function connect(extra: { allowPlayLookups?: boolean; passEnv?: string[]; spawner?: Spawner } = {}) {
   const server = createAnsibleMcpServer({
+    ...(extra.spawner ? { spawner: extra.spawner } : {}),
     exec: { ...execCfg, passEnv: [...ENV_KEYS, ...(extra.passEnv ?? [])] },
     remoteCache: `${WORK}/cache`,
     cacheDir: isWin ? tempDir() : `${WORK}/cache`,
@@ -126,7 +127,9 @@ async function connect(extra: { allowPlayLookups?: boolean; passEnv?: string[] }
 }
 
 async function call(client: Client, name: string, args: Record<string, unknown>) {
-  const res = await client.callTool({ name, arguments: args });
+  // The SDK's 60 s default request timeout is shorter than a cold ansible-lint
+  // or collection download through wsl.exe; the tests carry their own timeouts.
+  const res = await client.callTool({ name, arguments: args }, undefined, { timeout: 300_000 });
   const text = (res.content as { text: string }[]).map((c) => c.text).join("\n");
   return { text, isError: res.isError === true };
 }
@@ -285,6 +288,68 @@ describe.skipIf(!reachable)("integration: real Ansible", () => {
     }
     // Exactly the residue design.md R1 documents; vault-password-script, inventory-script and the rest never ran.
     expect(markers()).toEqual(["hosts-lookup", "play-name-lookup", "vars-files-lookup", "vars-plugin-import"]);
+  });
+
+  it("never runs a vault_password_file script from the effective ansible.cfg, --version probes included", {
+    timeout: 600_000,
+  }, async (ctx) => {
+    if (!hasCollections) ctx.skip("installed set not found");
+    // The hostile ansible.cfg (vault_password_file = ./vault-pass.sh, a script
+    // inventory) is forced on EVERY child via a forwarded ANSIBLE_CONFIG, so the
+    // project-less --version probes read it too (normally they run in the
+    // server's cwd and never see a project's cfg).
+    side(["rm", "-r", "-f", MARKS]);
+    const argvs: string[][] = [];
+    const recording: Spawner = (cmd, args, opts) => {
+      // argv (prefix mode carries the env as `env K=V`) plus the spawn env (native mode).
+      argvs.push([cmd, ...args, ...Object.entries(opts.env).map(([k, v]) => `${k}=${v}`)]);
+      return nodeSpawner(cmd, args, opts);
+    };
+    const saved = { cfg: process.env.ANSIBLE_CONFIG, home: process.env.HOME };
+    process.env.ANSIBLE_CONFIG = `${WORK}/hostile/ansible.cfg`;
+    process.env.HOME = `${WORK}/home`;
+    const c = await connect({ passEnv: ["ANSIBLE_CONFIG", "HOME"], spawner: recording });
+    try {
+      for (const [name, args] of [
+        ["ansible_project_info", {}],
+        ["ansible_config", {}],
+        ["ansible_module_doc", { name: "ansible.builtin.debug" }],
+        ["ansible_module_search", { query: "firewall", collection: "ansible.posix" }],
+        ["ansible_check_task_args", { file: "playbooks/tasks/bad_args.yml" }],
+        ["ansible_role_interface", { role: "webapp" }],
+        ["ansible_inventory", {}],
+        ["ansible_playbook_structure", { playbook: "playbooks/site.yml" }],
+        ["ansible_collections", {}],
+        ["ansible_lint_summary", {}],
+      ] as [string, Record<string, unknown>][]) {
+        const r = await call(c, name, { dir: P(), ...args });
+        expect(r.isError, `${name}: ${r.text}`).toBe(false);
+        expect(r.text, name).not.toMatch(SENTINELS);
+        if (name === "ansible_config") expect(r.text).toMatch(/config file .*hostile\/ansible\.cfg/);
+      }
+    } finally {
+      await c.close();
+      for (const [k, v] of [
+        ["ANSIBLE_CONFIG", saved.cfg],
+        ["HOME", saved.home],
+      ] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    // The probes really ran, with the hostile cfg forwarded and the safety env.
+    const probes = argvs.filter((a) => a.includes("--version"));
+    const probed = probes.map((a) => a.find((x) => /(^|\/)ansible(-lint)?$/.test(x)) ?? "");
+    expect(probed).toEqual(
+      expect.arrayContaining([expect.stringMatching(/ansible$/), expect.stringMatching(/ansible-lint$/)]),
+    );
+    for (const a of probes) {
+      expect(a.join(" ")).toContain(`ANSIBLE_CONFIG=${WORK}/hostile/ansible.cfg`);
+      expect(a.join(" ")).toMatch(/ANSIBLE_VAULT_PASSWORD_FILE=\S*vault-null/);
+    }
+    expect(markers()).not.toContain("vault-password-script");
+    expect(markers()).not.toContain("inventory-script");
+    expect(markers()).toEqual([]);
   });
 
   it.skipIf(!isWin)(

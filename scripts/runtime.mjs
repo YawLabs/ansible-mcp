@@ -39,6 +39,17 @@ import { delimiter, join, sep } from "node:path";
 // broken one.
 export const VERSION_PROBE_TIMEOUT_MS = 5_000;
 
+/**
+ * True when `--version` output carries oam's own banner ("oam 0.19.0" at the
+ * start of a line), the same test as the launcher's oamBanner. Answering
+ * `--version` is not enough: OAM_BIN pointing at node ("v22.x.y") would be
+ * accepted and the typecheck would run `node check .` and fail instead of
+ * falling back to tsc.
+ */
+function isOamBanner(text) {
+  return /^oam\s+\d+\.\d+\.\d+/m.test(text);
+}
+
 const isWin = process.platform === "win32";
 const exeName = isWin ? "oam.exe" : "oam";
 
@@ -94,15 +105,19 @@ export function isBuildTreeBinary(p) {
 
 /**
  * Resolve an oam executable, or null when oam should not be used.
- * Verifies the binary actually runs -- a stale $OAM_BIN or a broken PATH entry
- * must degrade to Node rather than fail the typecheck.
+ * Verifies the binary actually runs and identifies as oam -- a stale $OAM_BIN,
+ * a broken PATH entry or a non-oam binary must degrade to Node rather than
+ * fail the typecheck.
  *
  * Returns `{ cmd, version, fromBuildTree }`. `fromBuildTree` is true when the
  * only oam available lives under `target/`; callers doing anything
  * timing-sensitive should surface that rather than publish the number.
  */
 export function findOam() {
-  if (process.env.ANSIBLE_MCP_RUNTIME === "node") return null;
+  // Case-insensitive, matching the launcher's own read of the same variable
+  // (`bin/ansible-mcp.mjs`): `=NODE` must force the Node path here too, or the
+  // typecheck silently uses oam the launcher would have refused.
+  if ((process.env.ANSIBLE_MCP_RUNTIME ?? "").toLowerCase() === "node") return null;
 
   const candidates = [];
   // An explicit OAM_BIN is an instruction, not a hint -- it is never reordered,
@@ -122,6 +137,8 @@ export function findOam() {
         timeout: VERSION_PROBE_TIMEOUT_MS,
         windowsHide: true,
       });
+      // Runs, but is not oam (node, some other tool on PATH): try the next one.
+      if (!isOamBanner(out)) continue;
       return { cmd, version: out.trim(), fromBuildTree: isBuildTreeBinary(cmd) };
     } catch {
       // Not executable, wrong arch, wedged (timed out), or a stale entry -- try

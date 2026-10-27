@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- The `--version` probes (`ansible`, `ansible-lint`, and the per-binary probes
+  of `ansible_project_info`) now run under the full safety environment, so
+  every Ansible child except `ansible-config dump` gets it, as documented.
+  Verified with real ansible-core 2.21.5: no tool runs a `vault_password_file`
+  script from the effective ansible.cfg (new integration test forces the
+  hostile project's ansible.cfg on every child).
+
+### Fixed
+- `ansible_check_task_args`: a string `mode` (any key=value `mode=`, or a
+  quoted one) that is neither octal nor symbolic (`mode=493`, `0x1ed`) is
+  reported; Ansible fails such a task. Key=value values are strings, so
+  `mode=755` / `mode=0755` are both 0755 and get no YAML 1.1 hint (checked
+  against real Ansible).
+- `ansible_collections` / `ansible_upgrade_impact`: shadowing order and the
+  site-packages bundle line no longer assume `/`-separated paths. Native
+  Windows separators, `\\wsl.localhost` UNC paths, drive paths vs their WSL
+  translation, and a COLLECTIONS_PATHS entry ending in `ansible_collections`
+  all match; Debian's `dist-packages` bundle is recognised too.
+- `ansible_upgrade_impact`: a tarball download that breaks after Galaxy
+  answered (`Failed to download collection tar ... <urlopen error ...>`, seen
+  as a connection reset in a real run) is a plain "could not reach Galaxy
+  server" answer with the cached targets, not a raw ansible-galaxy dump.
+
 ## [0.1.2] -- 2026-10-16
 
 ### Fixed

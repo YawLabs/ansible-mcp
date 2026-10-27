@@ -437,6 +437,14 @@ export function mapGalaxyError(
     }
     return `could not reach ${host} to download ${collection} ${version} (offline or proxy). Cached targets: ${cached.length ? cached.join(", ") : "none"}. Nothing in ${dir} was changed.`;
   }
+  // The API answered but the tarball download broke (seen for real: a
+  // connection reset mid-download). Same plain answer shape as offline.
+  const t = /Failed to download collection tar from '([^']*)': <urlopen error (?:\[Errno -?\d+\] )?([^>]*)>/.exec(
+    stderr,
+  );
+  if (t) {
+    return `could not reach Galaxy server '${t[1]}' to download ${collection} ${version} (download failed: ${redactText(t[2]!.trim()).slice(0, 200)}). Cached targets: ${cached.length ? cached.join(", ") : "none"}. Nothing in ${dir} was changed.`;
+  }
   return `ansible-galaxy collection install failed (exit ${code}):\n${redactText(stderr.trim()).slice(0, 2048)}`;
 }
 
@@ -615,7 +623,7 @@ async function runUpgrade(ctx: AnsibleContext, x: UpgradeParams): Promise<string
     throw new Error(
       `ansible-galaxy collection list failed (exit ${listRes.code}):\n${redactText(listRes.stderr.trim()).slice(0, 2048)}`,
     );
-  const installedAll = byCollection(parseCollectionList(listRes.stdout), collectionsPaths);
+  const installedAll = byCollection(parseCollectionList(listRes.stdout), collectionsPaths, ctx.runner.knownMountRoot());
   const eff = installedAll.get(collection)?.[0];
   if (!eff) {
     return `${collection} is not installed in any collections path (${collectionsPaths.map((c) => ctx.runner.displaySide(c)).join(", ") || "none"}); nothing to compare. ansible_collections shows what requirements.yml expects.`;

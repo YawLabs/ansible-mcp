@@ -180,15 +180,13 @@ async function probeBinaries(ctx: AnsibleContext): Promise<string> {
   // With a BIN_DIR, one listing replaces five `--version` spawns (each one is
   // 200-700 ms through wsl.exe, F23); only ansible-lint is asked for its version.
   const listed = ctx.runner.cfg.binDir ? await listBinDir(ctx) : null;
-  const quiet = await ctx.quietEnv();
+  const probe = await ctx.probeEnv();
   const res = await Promise.all(
     tools.map(async (t) => {
       if (listed && t !== "ansible-lint") return { t, ok: listed.includes(t), v: "" };
       if (listed && !listed.includes(t)) return { t, ok: false, v: "" };
       try {
-        const r = await ctx.runner.run(t, t === "ansible-lint" ? ["--version", "--offline"] : ["--version"], {
-          env: quiet,
-        });
+        const r = await ctx.runner.run(t, t === "ansible-lint" ? ["--version", "--offline"] : ["--version"], probe);
         if (r.code !== 0) return { t, ok: false, v: "" };
         const v = t === "ansible-lint" ? (/ansible-lint\s+([\d.]+)/.exec(stripAnsi(r.stdout))?.[1] ?? "") : "";
         return { t, ok: true, v };
@@ -802,7 +800,7 @@ export async function collections(
   const collectionsPaths = settingList(cfg, "COLLECTIONS_PATHS");
   return renderCollections({
     reqFiles: reqRels.map((f) => ({ file: f, reqs: parseRequirements(files.read(join(p.dir, f))?.root, f) })),
-    installed: byCollection(parseCollectionList(list.stdout), collectionsPaths),
+    installed: byCollection(parseCollectionList(list.stdout), collectionsPaths, ctx.runner.knownMountRoot()),
     roles: roles.code === 0 ? parseRoleList(roles.stdout) : [],
     collectionsPaths,
     includeExtras: x.includeExtras,
@@ -848,8 +846,8 @@ export async function lintSummary(
   const [r, v] = await Promise.all([
     ctx.runSafe(p, "ansible-lint", args),
     ctx
-      .quietEnv()
-      .then((env) => ctx.runner.run("ansible-lint", ["--version", "--offline"], { env }))
+      .probeEnv()
+      .then((s) => ctx.runner.run("ansible-lint", ["--version", "--offline"], s))
       .catch(() => null),
   ]);
   if (r.code !== 0 && r.code !== 2) {

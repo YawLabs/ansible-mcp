@@ -5,6 +5,8 @@ import { classifyDocStderr, parseDocJson, renderModuleDoc } from "../ansibleDoc.
 import {
   byCollection,
   checkRequirement,
+  collectionPathKey,
+  isSitePackages,
   parseCollectionList,
   parseRequirements,
   parseRoleList,
@@ -306,6 +308,73 @@ describe("collections (F12)", () => {
     const m = byCollection(parseCollectionList(readOut("galaxy/collection-list-shadowed.json")), paths);
     expect(m.get("ansible.posix")!.map((i) => i.version)).toEqual(["2.0.0", "1.5.4"]);
     expect(m.get("community.general")!.map((i) => i.version)).toEqual(["12.0.0", "9.5.2"]);
+  });
+
+  it("ranks shadowed copies whatever the path separator or form (native Windows, WSL, UNC)", () => {
+    const list = (paths: Record<string, string>) =>
+      parseCollectionList(
+        JSON.stringify(
+          Object.fromEntries(Object.entries(paths).map(([p, v]) => [p, { "ansible.posix": { version: v } }])),
+        ),
+      );
+    // Native Windows: backslashes, a trailing separator and drive-letter case in COLLECTIONS_PATHS.
+    const win = byCollection(
+      list({ "C:\\Users\\me\\site\\ansible_collections": "1.5.4", "D:\\ws\\colls\\ansible_collections": "2.0.0" }),
+      ["d:/ws/colls/", "C:\\Users\\me\\site"],
+    );
+    expect(win.get("ansible.posix")!.map((i) => i.version)).toEqual(["2.0.0", "1.5.4"]);
+    // A drive path and its WSL translation are the same place; a custom mount root too.
+    const wsl = byCollection(
+      list({ "/mnt/c/a/ansible_collections": "1.5.4", "/opt/x/ansible_collections/": "2.0.0" }),
+      ["/opt/x", "C:\\a"],
+    );
+    expect(wsl.get("ansible.posix")!.map((i) => i.version)).toEqual(["2.0.0", "1.5.4"]);
+    const custom = byCollection(
+      list({ "/opt/x/ansible_collections": "2.0.0", "/win/c/a/ansible_collections": "1.5.4" }),
+      ["C:/a", "/opt/x"],
+      "/win/",
+    );
+    expect(custom.get("ansible.posix")!.map((i) => i.version)).toEqual(["1.5.4", "2.0.0"]);
+    // A \\wsl.localhost UNC path is its Linux path; a configured path may itself end in ansible_collections.
+    const unc = byCollection(
+      list({ "/home/u/a/ansible_collections": "1.5.4", "/tmp/b/ansible_collections": "2.0.0" }),
+      ["/tmp/b/ansible_collections", "\\\\wsl.localhost\\Ubuntu\\home\\u\\a"],
+    );
+    expect(unc.get("ansible.posix")!.map((i) => i.version)).toEqual(["2.0.0", "1.5.4"]);
+    // Linux paths stay case-sensitive.
+    expect(collectionPathKey("/Opt/X")).not.toBe(collectionPathKey("/opt/x"));
+    expect(collectionPathKey("C:\\A\\ansible_collections\\")).toBe(collectionPathKey("/mnt/c/a"));
+  });
+
+  it("detects the ansible package's bundle with any separator, site- or dist-packages", () => {
+    for (const p of [
+      "/usr/lib/python3/site-packages/ansible_collections",
+      "/usr/lib/python3/dist-packages/ansible_collections",
+      "C:\\Python312\\Lib\\site-packages\\ansible_collections",
+      "C:\\Python312\\Lib\\site-packages\\ansible_collections\\",
+    ])
+      expect(isSitePackages(p), p).toBe(true);
+    expect(isSitePackages("/home/u/.ansible/collections/ansible_collections")).toBe(false);
+    expect(isSitePackages("/srv/my-site-packages/ansible_collections")).toBe(false);
+    const text = renderCollections({
+      reqFiles: [],
+      installed: byCollection(
+        parseCollectionList(
+          JSON.stringify({
+            "C:\\Py\\Lib\\site-packages\\ansible_collections": { "amazon.aws": { version: "9.0.0" } },
+            "/usr/lib/python3/dist-packages/ansible_collections": { "cisco.ios": { version: "9.0.0" } },
+            "C:\\me\\colls\\ansible_collections": { "my.own": { version: "1.0.0" } },
+          }),
+        ),
+        ["C:\\me\\colls"],
+      ),
+      roles: [],
+      collectionsPaths: ["C:\\me\\colls"],
+      includeExtras: true,
+      display: (s) => s,
+    });
+    expect(text).toContain("installed, not required (1):\n  my.own 1.0.0");
+    expect(text).toContain("2 collections from the ansible package (site-packages)");
   });
 
   it("dedupes role list blocks and evaluates galaxy constraints", () => {

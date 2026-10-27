@@ -80,13 +80,43 @@ export function parseCollectionList(text: string): Installed[] {
 }
 
 /**
+ * A comparison key for a collections path, whatever separator or form it was
+ * printed in: `\` and `/` are the same, repeated and trailing separators
+ * collapse, a trailing `ansible_collections` segment is dropped, a WSL UNC path
+ * (`\\wsl.localhost\<distro>\x`, `\\wsl$\<distro>\x`) becomes its Linux path,
+ * and a drive path (`C:\x`) and its WSL translation under `mountRoot`
+ * (`/mnt/c/x`) share one case-insensitive key.
+ */
+export function collectionPathKey(p: string, mountRoot = "/mnt/"): string {
+  let s = p.trim().replace(/\\/g, "/");
+  const unc = /^\/\/(?:wsl\.localhost|wsl\$)\/[^/]+(\/.*)?$/i.exec(s);
+  if (unc) s = unc[1] ?? "/";
+  s = s.replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+  s = s.replace(/(^|\/)ansible_collections$/, "").replace(/\/+$/, "");
+  const root = `/${mountRoot.replace(/^\/+|\/+$/g, "")}/`.replace(/^\/\/$/, "/");
+  const wsl = new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([a-z])(/.*)?$`, "i").exec(s);
+  const drive = wsl ? [wsl[1]!, wsl[2] ?? ""] : (/^([a-z]):(\/.*)?$/i.exec(s)?.slice(1) ?? null);
+  if (drive) return `${drive[0]!.toLowerCase()}:${(drive[1] ?? "").toLowerCase()}`;
+  return s;
+}
+
+/** Is this `.../ansible_collections` path inside a Python install (the `ansible` package's bundle)? */
+export function isSitePackages(p: string): boolean {
+  return /(^|[\\/])(site|dist)-packages[\\/]+ansible_collections[\\/]*$/i.test(p.trim());
+}
+
+/**
  * All installed copies of each collection, effective (first) first: paths in
  * COLLECTIONS_PATHS order, then anything else (site-packages, playbook-adjacent).
  */
-export function byCollection(installed: Installed[], collectionsPaths: string[]): Map<string, Installed[]> {
+export function byCollection(
+  installed: Installed[],
+  collectionsPaths: string[],
+  mountRoot = "/mnt/",
+): Map<string, Installed[]> {
+  const keys = collectionsPaths.map((c) => collectionPathKey(c, mountRoot));
   const rank = (p: string) => {
-    const base = p.replace(/\/ansible_collections\/?$/, "");
-    const i = collectionsPaths.findIndex((c) => c.replace(/\/+$/, "") === base);
+    const i = keys.indexOf(collectionPathKey(p, mountRoot));
     return i < 0 ? collectionsPaths.length : i;
   };
   const out = new Map<string, Installed[]>();
@@ -224,8 +254,8 @@ export function renderCollections(r: CollectionsReport): string {
     }
   }
   const extras = [...r.installed.entries()].filter(([n]) => !required.has(n));
-  const bundle = extras.filter(([, l]) => /site-packages\/ansible_collections/.test(l[0]!.path));
-  const own = extras.filter(([, l]) => !/site-packages\/ansible_collections/.test(l[0]!.path));
+  const bundle = extras.filter(([, l]) => isSitePackages(l[0]!.path));
+  const own = extras.filter(([, l]) => !isSitePackages(l[0]!.path));
   if (r.includeExtras) {
     if (own.length) {
       lines.push(`installed, not required (${own.length}):`);

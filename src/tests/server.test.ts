@@ -268,10 +268,11 @@ describe("server", () => {
     const lint = await call("ansible_lint_summary");
     expect(lint.split("\n")[0]).toBe("ansible-lint 26.10.1 (offline): 7 failures, 2 warnings in 19 files");
 
-    // Every Ansible child except ansible-config dump got the safety environment.
-    for (const c of calls.filter(
-      (x) => !["ansible-config", "ansible"].includes(x.tool) && !x.args.includes("--version"),
-    )) {
+    // Every Ansible child except ansible-config dump got the safety environment,
+    // the --version probes (ansible, ansible-lint, the per-binary ones) included.
+    const probes = calls.filter((x) => x.args.includes("--version"));
+    expect(probes.map((x) => x.tool)).toEqual(expect.arrayContaining(["ansible", "ansible-lint"]));
+    for (const c of calls.filter((x) => !(x.tool === "ansible-config" && x.args.includes("dump")))) {
       expect(c.env.ANSIBLE_VAULT_PASSWORD_FILE, `${c.tool} ${c.args.join(" ")}`).toMatch(/[\\/]vault-null$/);
       expect(c.env.ANSIBLE_INVENTORY_ENABLED).toBe("host_list,yaml,ini,toml");
       expect(c.env.ANSIBLE_VAULT_ID_MATCH).toBeUndefined();
@@ -343,9 +344,9 @@ describe("server", () => {
     return [install, targetDocs, targetSyntax];
   }
 
-  /** Every Ansible child except ansible-config dump / --version probes got the safety env. */
+  /** Every Ansible child except ansible-config dump got the safety env (the --version probes too). */
   function expectSafetyEnv(calls: Recorded[]) {
-    const safe = calls.filter((x) => !["ansible-config", "ansible"].includes(x.tool) && !x.args.includes("--version"));
+    const safe = calls.filter((x) => !(x.tool === "ansible-config" && x.args.includes("dump")));
     expect(safe.length).toBeGreaterThan(0);
     for (const c of safe) {
       expect(c.env.ANSIBLE_VAULT_PASSWORD_FILE, `${c.tool} ${c.args.join(" ")}`).toMatch(/[\\/]vault-null$/);
