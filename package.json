@@ -1,6 +1,6 @@
 {
   "name": "@yawlabs/ansible-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "mcpName": "io.github.YawLabs/ansible-mcp",
   "description": "Ansible MCP server for what is true in THIS checkout: installed module specs, task-argument checks, role interfaces, inventory (redacted), play structure, config, collection drift and collection-upgrade impact",
   "license": "MIT",

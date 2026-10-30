@@ -9,12 +9,12 @@
     "id": "1421429829"
   },
   "websiteUrl": "https://yaw.sh/mcp-servers/ansible-mcp/",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@yawlabs/ansible-mcp",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "transport": {
         "type": "stdio"
       }
