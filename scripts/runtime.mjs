@@ -40,7 +40,7 @@ import { delimiter, join, sep } from "node:path";
 export const VERSION_PROBE_TIMEOUT_MS = 5_000;
 
 /**
- * True when `--version` output carries oam's own banner ("oam 0.19.0" at the
+ * True when `--version` output carries oam's own banner ("oam 0.19.1" at the
  * start of a line), the same test as the launcher's oamBanner. Answering
  * `--version` is not enough: OAM_BIN pointing at node ("v22.x.y") would be
  * accepted and the typecheck would run `node check .` and fail instead of

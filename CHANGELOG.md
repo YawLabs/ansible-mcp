@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- oam floor raised to 0.19.1 (`OAM_MIN` in `bin/ansible-mcp.mjs`), the latest
+  oam release. oam 0.19.0 and older, 0.19.0 dev builds included, are now below
+  the floor: the launcher passes them over, and a host on one hands off.
+  Re-verified through the launcher on oam 0.19.1: MCP handshake, tools/list,
+  `ansible_role_interface` and `ansible_upgrade_impact`'s argument checks.
+
 ### Security
 - The `--version` probes (`ansible`, `ansible-lint`, and the per-binary probes
   of `ansible_project_info`) now run under the full safety environment, so
@@ -16,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hostile project's ansible.cfg on every child).
 
 ### Fixed
+- `scripts/check-oam-floor.mjs` no longer exits 0 in silence when run from a
+  junctioned or symlinked checkout: its is-this-the-main-module test now
+  realpaths both `process.argv[1]` and the module's own path, as Node does for
+  the latter.
 - `ansible_check_task_args`: a string `mode` (any key=value `mode=`, or a
   quoted one) that is neither octal nor symbolic (`mode=493`, `0x1ed`) is
   reported; Ansible fails such a task. Key=value values are strings, so

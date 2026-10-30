@@ -1330,7 +1330,7 @@ Pre-commit gates (house standard): `npm run lint:fix`, `npx tsc --noEmit`, `npm 
     `constraints.ts`, `lint.ts`, `upgrade.ts`, `redact.ts`
 - `bin/ansible-mcp.mjs`, `scripts/runtime.mjs`, `scripts/typecheck.mjs`, `scripts/check-oam-floor.mjs` and
   `scripts/lint.mjs` are ported as they are, with env names `ANSIBLE_MCP_RUNTIME` and `ANSIBLE_MCP_ALLOW_STALE_OAM`.
-  The oam floor uses the same policy (the latest verified oam, 0.19.0 today). The reason the floor matters carries
+  The oam floor uses the same policy (the latest verified oam, 0.19.1 today). The reason the floor matters carries
   over: spawns pass an explicit env that deletes variables (`env -u` on the WSL side; natively, `ANSIBLE_VAULT_*`
   overrides replace user values).
 - There is no `build-binary.mjs` and no `sea-config.json` (npm only). `package.json` has `"private": true`.

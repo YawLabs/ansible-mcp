@@ -13,8 +13,9 @@
  * This server is NOT a zero-dependency bundle: dist/ imports
  * @modelcontextprotocol/sdk, zod and yaml from node_modules. That is fine on
  * both paths: oam resolves npm packages against an existing node_modules.
- * Checked through this launcher on oam 0.19.0: an MCP handshake, tools/list
- * and ansible_role_interface (YAML parsing, no subprocess).
+ * Checked through this launcher on oam 0.19.1: an MCP handshake, tools/list,
+ * ansible_role_interface (YAML parsing, no subprocess) and ansible_upgrade_impact
+ * up to its argument checks (no Ansible was reachable to go further).
  *
  * WHY THE FALLBACK COSTS NOTHING
  * npm has already started Node to run this launcher, so falling back is a
@@ -79,7 +80,7 @@
  * so nothing meaningful is left to deny and `--permission` is not wired up.
  *
  * MINIMUM OAM VERSION
- * The latest oam release, 0.19.0 -- bump OAM_MIN when oam ships a newer one.
+ * The latest oam release, 0.19.1 -- bump OAM_MIN when oam ships a newer one.
  * Only the current oam is used and verified; an older one is passed over.
  *
  * The floor is not cosmetic. The server runs Ansible with an explicit child
@@ -115,7 +116,7 @@ import { fileURLToPath } from "node:url";
  * environment (needed by every Ansible spawn that deletes a variable). See
  * MINIMUM OAM VERSION above.
  */
-const OAM_MIN = [0, 19, 0];
+const OAM_MIN = [0, 19, 1];
 
 /**
  * Bound on each `oam --version` probe. A healthy oam answers in milliseconds;
@@ -231,7 +232,7 @@ function parseVersion(text) {
 
 /**
  * `oam --version` output -> [major, minor, patch], or null unless it carries
- * oam's own banner ("oam 0.19.0" at the start of a line). Any x.y.z is NOT
+ * oam's own banner ("oam 0.19.1" at the start of a line). Any x.y.z is NOT
  * enough: an OAM_BIN (or an oam.exe on disk) that is really another program --
  * node prints "v22.22.2" -- would clear the floor, and the launcher would then
  * spawn `<it> run dist/index.js`, which dies with no Node fallback because the

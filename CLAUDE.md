@@ -21,7 +21,7 @@ npm only, no SEA binary; published to npm (and the MCP Registry, via server.json
 - `src/checkArgs.ts` -- `ansible_check_task_args` checks and rendering; `typeError()` mirrors Ansible's conversions; `resolveTaskDoc()` (collections keyword first) is shared with the walk users.
 - `src/role.ts`, `src/inventory.ts`, `src/playbook.ts` (list/stderr parsing, the R1 lookup pre-scan, local plugin listing), `src/config.ts` (dump parsing, galaxy credential redaction, the safety footer), `src/collections.ts`, `src/constraints.ts` (galaxy constraint evaluator), `src/lint.ts`, `src/redact.ts` -- pure renderers/parsers.
 - `src/upgrade.ts` -- `ansible_upgrade_impact`: runtime.yml parsing and routing, the per-task diff rules, the report and verdict, requirements constraint lines, galaxy error mapping, `ensureTarget()` (cache hit by MANIFEST.json version, else `install --no-deps -p <.tmp-*>` then rename), orchestration, `include_unused` via `--metadata-dump`.
-- `bin/ansible-mcp.mjs` -- npm `bin`, the oam-discovering runtime launcher (see Runtime below). Prefers the newest oam at or above `OAM_MIN` (0.19.0), else imports `dist/index.js` into its own process.
+- `bin/ansible-mcp.mjs` -- npm `bin`, the oam-discovering runtime launcher (see Runtime below). Prefers the newest oam at or above `OAM_MIN` (0.19.1), else imports `dist/index.js` into its own process.
 - `scripts/runtime.mjs` (oam discovery for the dev scripts), `scripts/typecheck.mjs` (`oam check .`, else tsc), `scripts/check-oam-floor.mjs` (floor drift + staleness), `scripts/check-compliance.mjs` (mcp-compliance grade A gate), `scripts/lint.mjs` (Biome).
 
 ## Key patterns
@@ -49,7 +49,7 @@ npm only, no SEA binary; published to npm (and the MCP Registry, via server.json
 
 | Task | Default | Alternate |
 |---|---|---|
-| `bin` entry (`bin/ansible-mcp.mjs`) | newest oam at or above 0.19.0, else Node in-process | `ANSIBLE_MCP_RUNTIME=node` / `=oam`, `OAM_BIN`; see the launcher header |
+| `bin` entry (`bin/ansible-mcp.mjs`) | newest oam at or above 0.19.1, else Node in-process | `ANSIBLE_MCP_RUNTIME=node` / `=oam`, `OAM_BIN`; see the launcher header |
 | `npm run typecheck` | `oam check .` if available, else `tsc --noEmit` | `ANSIBLE_MCP_RUNTIME=node` forces tsc; `typecheck:tsc` pins it |
 | `npm test`, `npm start` | Node | -- |
 
