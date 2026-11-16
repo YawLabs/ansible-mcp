@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- `overrides` raised to clear GHSA-rmxm-3fg6-px4f in `@hono/node-server`
+  (reached through `@modelcontextprotocol/sdk`): `@hono/node-server` `^2.1.3`
+  (was `^1.19.15`, which pinned the vulnerable 1.x line), hono `^4.13.16`,
+  fast-uri `^3.1.9`, ip-address `^10.7.6`, qs `^6.17.1`. `npm audit` reports 0.
+
 ## [0.1.4] -- 2026-11-15
 
 ### Changed
