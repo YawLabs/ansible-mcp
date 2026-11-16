@@ -2,7 +2,7 @@
 
 [![Add to Yaw MCP](https://yaw.sh/yaw-mcp-button.svg)](https://yaw.sh/mcp/install?name=Ansible&command=npx&args=-y%2C%40yawlabs%2Fansible-mcp&description=Ansible%20checkout%20truth%3A%20module%20specs%2C%20task%20args%2C%20roles%2C%20inventory%2C%20plays%2C%20upgrade%20impact&source=https%3A%2F%2Fgithub.com%2FYawLabs%2Fansible-mcp)
 
-One click adds this to your local Yaw MCP config so it's available in every Yaw Terminal session. Or install manually below.
+One click adds this to your local Yaw MCP config so it's available in every Yaw Terminal session. **Tested with Yaw MCP 1.1.13 or newer.** Or install manually below.
 
 **What is actually true in THIS Ansible checkout on THIS control node: the exact option specs of the modules you have INSTALLED (so coding agents stop writing options that do not exist in your collection version), task-argument checks, role interfaces, inventory structure and vars (redacted), play structure, effective config, requirements drift, and what a collection upgrade would break in your tasks.** It is read-only: it never runs a play, never runs `--check`, never connects to a managed host and never supplies a vault secret. It complements Red Hat's servers rather than replacing them: AAP MCP answers what is true in the controller, ADT MCP takes actions (lint `--fix`, navigator runs, scaffolding, EE builds). Run them together.
 
