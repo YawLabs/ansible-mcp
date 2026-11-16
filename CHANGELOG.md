@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- oam floor raised to 0.20.2 (`OAM_MIN` in `bin/ansible-mcp.mjs`), the latest
+  oam release. oam 0.20.1 and older, 0.20.1 dev builds included, are now below
+  the floor: the launcher passes them over, and a host on one hands off.
+  Re-verified through the launcher on oam 0.20.2 (`ANSIBLE_MCP_RUNTIME=oam`, and
+  in-process under `oam run bin/ansible-mcp.mjs`): MCP handshake, tools/list
+  (11 tools), `ansible_role_interface` and `ansible_upgrade_impact`'s argument
+  checks, with the same answers as on Node.
+- `@modelcontextprotocol/sdk` range raised to `^1.32.2` (was `^1.32.1`), the
+  range Yaw MCP 1.1.13 pins. `@yawlabs/mcp-compliance` was already on its
+  `^0.20.4`.
+
 ## [0.1.3] -- 2026-10-30
 
 ### Changed
