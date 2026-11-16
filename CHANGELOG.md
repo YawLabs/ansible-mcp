@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range Yaw MCP 1.1.13 pins. `@yawlabs/mcp-compliance` was already on its
   `^0.20.4`.
 
+### Security
+- Lockfile-only `npm audit fix`: body-parser 2.4.0, hono 4.13.18,
+  `@hono/node-server` 1.19.19, fast-uri 3.1.9, undici 8.12.4 and vitest /
+  `@vitest/mocker` 4.1.12 pick up their published advisories' fixes. No
+  `package.json` range changed.
+
 ## [0.1.3] -- 2026-10-30
 
 ### Changed
