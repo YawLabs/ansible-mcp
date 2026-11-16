@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] -- 2026-11-15
+
 ### Changed
 - oam floor raised to 0.20.2 (`OAM_MIN` in `bin/ansible-mcp.mjs`), the latest
   oam release. oam 0.20.1 and older, 0.20.1 dev builds included, are now below
